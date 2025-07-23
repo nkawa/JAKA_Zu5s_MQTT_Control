@@ -28,8 +28,8 @@ class JakaRobot:
     ):
         logger.info("__init__")
         self.name = name
-        self.move = disable_move
-        self.feed = disable_feed
+        self.move = not disable_move
+        self.feed = not disable_feed
         if self.move:
             self.client_move = RC(ip=ip_move, port=port_move)
             self.defPose = [50.67851, -120.33679, 452.7194, 166.39565, -18.02921, -130.30474]
