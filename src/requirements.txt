@@ -4,3 +4,5 @@ paho-mqtt>=2.1.0
 python-dotenv>=1.0.1
 pydhgripper @ git+https://github.com/han-xudong/pyDHgripper.git@main
 psutil>=7.0.0
+pyqtgraph==0.13.7
+PyQt6==6.9.1

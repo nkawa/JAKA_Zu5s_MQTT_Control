@@ -1,3 +1,4 @@
+import traceback
 from typing import List, Optional
 
 import json
@@ -328,3 +329,32 @@ class JakaRobot:
         """トルクセンサの実際の力 (6次元)"""
         torqsensor = self.latest_feed["torqsensor"]
         return torqsensor[1][2]
+    
+    def format_error(self, e: Exception) -> str:
+        s = "\n"
+        s = s + "Error trace: " + traceback.format_exc() + "\n"
+        return s
+
+    def get_cur_error_info_all(self):
+        return self.get_latest_error()
+    
+    def are_all_errors_stateless(self, errors):
+        # TODO
+        return False
+
+    def recover_automatic_enable(self):
+        # TODO
+        self.clear_error()
+        self.enable()
+
+    def jog_joint(self, joint: int, direction: float) -> None:
+        joints = self.get_current_joint()
+        joints = np.asarray(joints)
+        joints[joint] += direction
+        self.move_joint(joints.tolist())
+
+    def jog_tcp(self, axis: int, direction: float) -> None:
+        poses = self.get_current_pose()
+        poses = np.asarray(poses)
+        poses[axis] += direction
+        self.move_pose(poses.tolist())
