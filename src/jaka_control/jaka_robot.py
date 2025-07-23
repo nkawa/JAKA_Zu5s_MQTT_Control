@@ -57,21 +57,21 @@ class JakaRobot:
             self.client_feed.set_callback(self._on_feed)
         if self.move:
             self.client_move.login()
-        cnt = 10
-        is_powered_on = False
-        while True:
-            try:
-                is_powered_on = self.is_powered_on()
-                break
-            except ValueError:
-                cnt += 1
-                time.sleep(1)
-                if cnt == 10:
-                    raise ValueError("Cannot start")
-        if not is_powered_on:
-            return self.client_move.power_on()
-        else:
-            logger.info("Already powered on")
+            cnt = 10
+            is_powered_on = False
+            while True:
+                try:
+                    is_powered_on = self.is_powered_on()
+                    break
+                except ValueError:
+                    cnt += 1
+                    time.sleep(1)
+                    if cnt == 10:
+                        raise ValueError("Cannot start")
+            if not is_powered_on:
+                return self.client_move.power_on()
+            else:
+                logger.info("Already powered on")
 
     def _on_feed(self, data):
         if self.feed:
@@ -260,10 +260,12 @@ class JakaRobot:
         self.client_move.servo_move_enable(False)[0]
 
     def disable(self):
-        self.client_move.disable_robot()
+        if self.move:
+            self.client_move.disable_robot()
 
     def stop(self):
-        self.client_move.logout()
+        if self.move:
+            self.client_move.logout()
 
     def get_suggested_servo_interval(self):
         return 0.001
@@ -288,6 +290,10 @@ class JakaRobot:
     def is_enabled(self):
         ret = self.client_move.get_robot_state()
         return ret["enable"] == "robot_enabled"
+    
+    def is_enabled_feed(self):
+        if self.latest_feed is not None:
+            return self.latest_feed["enabled"]
 
     def is_protective_stop(self):
         (ec, ps) = self.client_move.protective_stop_status()

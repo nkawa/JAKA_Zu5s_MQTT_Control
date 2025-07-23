@@ -88,7 +88,7 @@ class MQTTWin:
         self.pm.startDebug()
  
         self.root = root
-        self.root.title("MQTT-CobottaPro900 Controller")
+        self.root.title("MQTT-JakaZu5s Controller")
         self.root.geometry("1100x1080")
 
         for col in range(8):
@@ -107,7 +107,7 @@ class MQTTWin:
 
         self.button_DemoPutDownBox = \
             tk.Button(self.root, text="DemoPutDownBox", padx=5,
-                       command=self.DemoPutDownBox, state="normal")
+                       command=self.DemoPutDownBox, state="disabled")
         self.button_DemoPutDownBox.grid(row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
 
         row += 1

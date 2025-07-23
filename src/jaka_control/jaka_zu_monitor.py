@@ -55,7 +55,6 @@ class Jaka_MON:
             # logger=self.robot_logger,
         )
         self.robot.start()
-        self.robot.clear_error()
         tool_id = int(os.environ["TOOL_ID"])
         self.find_and_setup_hand(tool_id)
 

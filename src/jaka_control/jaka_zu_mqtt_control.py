@@ -30,7 +30,6 @@ ROBOT_UUID = os.getenv("ROBOT_UUID","jaka-zu-real")
 ROBOT_MODEL = os.getenv("ROBOT_MODEL","jaka-zu-real")
 MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "mgr")
 MQTT_CTRL_TOPIC = os.getenv("MQTT_CTRL_TOPIC", "control")
-MQTT_ROBOT_STATE_TOPIC = os.getenv("MQTT_ROBOT_STATE_TOPIC", "robot")
 MQTT_FORMAT = os.getenv("MQTT_FORMAT", "Jaka-Control-IK")
 MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")+"/"+ROBOT_UUID
 
