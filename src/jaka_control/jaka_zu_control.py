@@ -99,6 +99,7 @@ class Jaka_CON:
             self.robot.clear_error()
             tool_id = int(os.environ["TOOL_ID"])
             self.find_and_setup_hand(tool_id)
+            self.gripper = AG95()
         except Exception as e:
             self.logger.error("Error in initializing robot: ")
             self.logger.error(f"{self.robot.format_error(e)}")
