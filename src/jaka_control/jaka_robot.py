@@ -77,9 +77,13 @@ class JakaRobot:
         if self.feed:
             if self.save_feed_fd is not None:
                 self.save_feed_fd.write(json.dumps(data) + "\n")
+            self.latest_feed = data
             errcode = data["errcode"]
             errmsg = data["errmsg"]
-            if errcode != "0x0":
+            protective_stop = data["protective_stop"]
+            if protective_stop == 0:
+                self.latest_errors = []
+            else:
                 logger.warning(("Robot error code and message", errcode, errmsg))
                 if len(self.latest_errors) >= self.n_latest_errors:
                     self.latest_errors = self.latest_errors[-(self.n_latest_errors - 1):]
@@ -93,7 +97,6 @@ class JakaRobot:
                     "emergency_stop": data["emergency_stop"],
                     "protective_stop": data["protective_stop"],
                 }]
-            self.latest_feed = data
 
     def enable(self):
         logger.info("enable")
@@ -290,10 +293,6 @@ class JakaRobot:
     def is_enabled(self):
         ret = self.client_move.get_robot_state()
         return ret["enable"] == "robot_enabled"
-    
-    def is_enabled_feed(self):
-        if self.latest_feed is not None:
-            return self.latest_feed["enabled"]
 
     def is_protective_stop(self):
         (ec, ps) = self.client_move.protective_stop_status()
@@ -301,22 +300,22 @@ class JakaRobot:
 
     def is_powered_on_feed(self):
         if self.latest_feed is None:
-            raise ValueError
+            return None
         return self.latest_feed["powered_on"]
 
     def is_enabled_feed(self):
         if self.latest_feed is None:
-            raise ValueError
+            return None
         return self.latest_feed["enabled"]
 
     def is_emergency_stop_feed(self):
         if self.latest_feed is None:
-            raise ValueError
+            return None
         return self.latest_feed["emergency_stop"]
         
     def is_protective_stop_feed(self):
         if self.latest_feed is None:
-            raise ValueError
+            return None
         return self.latest_feed["protective_stop"]
 
     def is_in_servomove(self) -> bool:
@@ -326,12 +325,18 @@ class JakaRobot:
         return in_servomove
 
     def get_current_pose_feed(self) -> List[float]:
+        if self.latest_feed is None:
+            return None
         return self.latest_feed["actual_position"]
 
     def get_current_joint_feed(self) -> List[float]:
+        if self.latest_feed is None:
+            return None
         return self.latest_feed["joint_actual_position"]
 
     def ForceValue_feed(self) -> List[float]:
+        if self.latest_feed is None:
+            return None
         """トルクセンサの実際の力 (6次元)"""
         torqsensor = self.latest_feed["torqsensor"]
         return torqsensor[1][2]

@@ -249,7 +249,7 @@ class Jaka_MON:
 
             # モータがONか
             try:
-                enabled = self.robot.is_enabled()
+                enabled = self.robot.is_enabled_feed()
             except Exception as e:
                 self.logger.warning(
                     "Somehow failed in checking if robot is enabled. "

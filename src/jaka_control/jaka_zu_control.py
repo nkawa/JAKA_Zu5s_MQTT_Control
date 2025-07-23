@@ -552,7 +552,7 @@ class Jaka_CON:
         # 順番固定
         self.robot.leave_servo_mode()
         while True:
-            if not self.robot.is_in_servo_mode():
+            if not self.robot.is_in_servomove():
                 break
             time.sleep(0.008)
         self.pose[14] = 0
