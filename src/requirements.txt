@@ -1,0 +1,6 @@
+numpy>=2.0.1
+pandas>=2.2.3
+paho-mqtt>=2.1.0
+python-dotenv>=1.0.1
+pydhgripper @ git+https://github.com/han-xudong/pyDHgripper.git@main
+psutil>=7.0.0
