@@ -23,8 +23,8 @@ from .interpolate import DelayedInterpolator
 # パラメータ
 load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))
 ROBOT_IP = os.getenv("ROBOT_IP", "10.5.5.100")
-SAVE = os.getenv("SAVE", "false") == "true"
-MOVE = os.getenv("MOVE", "false") == "true"
+SAVE = os.getenv("SAVE", "true") == "true"
+MOVE = os.getenv("MOVE", "true") == "true"
 
 # 基本的に運用時には固定するパラメータ
 # 実際にロボットを制御するかしないか (VRとの結合時のデバッグ用)

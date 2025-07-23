@@ -21,14 +21,16 @@ from .jaka_zu_monitor import Jaka_MON
 
 # パラメータ
 load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))
+MQTT_MODE = os.getenv("MQTT_MODE", "metawork")
 MQTT_SERVER = os.getenv("MQTT_SERVER", "sora2.uclab.jp")
+ROBOT_UUID = os.getenv("ROBOT_UUID","jaka-zu-real")
+ROBOT_MODEL = os.getenv("ROBOT_MODEL","jaka-zu-real")
+MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "mgr")
 MQTT_CTRL_TOPIC = os.getenv("MQTT_CTRL_TOPIC", "control")
-ROBOT_UUID = os.getenv("ROBOT_UUID","no-uuid")
-ROBOT_MODEL = os.getenv("ROBOT_MODEL","no-model")
-MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "dev")
+MQTT_ROBOT_STATE_TOPIC = os.getenv("MQTT_ROBOT_STATE_TOPIC", "robot")
+MQTT_FORMAT = os.getenv("MQTT_FORMAT", "Jaka-Control-IK")
 MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")+"/"+ROBOT_UUID
-MQTT_FORMAT = os.getenv("MQTT_FORMAT", "UR-realtime-control-MQTT")
-MQTT_MODE = os.getenv("MQTT_MODE", "local")
+
 
 class Jaka_MQTT:
     def __init__(self):

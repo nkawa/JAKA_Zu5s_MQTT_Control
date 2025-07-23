@@ -20,13 +20,18 @@ from dotenv import load_dotenv
 
 # パラメータ
 load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))
-ROBOT_IP = os.getenv("ROBOT_IP", "10.5.5.10")
-ROBOT_UUID = os.getenv("ROBOT_UUID","no-uuid")
-MQTT_SERVER = os.getenv("MQTT_SERVER", "127.0.0.1")
+
+MQTT_MODE = os.getenv("MQTT_MODE", "metawork")
+MQTT_SERVER = os.getenv("MQTT_SERVER", "sora2.uclab.jp")
+ROBOT_UUID = os.getenv("ROBOT_UUID","jaka-zu-real")
+ROBOT_MODEL = os.getenv("ROBOT_MODEL","jaka-zu-real")
+MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "mgr")
+MQTT_CTRL_TOPIC = os.getenv("MQTT_CTRL_TOPIC", "control")
 MQTT_ROBOT_STATE_TOPIC = os.getenv("MQTT_ROBOT_STATE_TOPIC", "robot")+"/"+ROBOT_UUID
-MQTT_FORMAT = os.getenv("MQTT_FORMAT", "UR-realtime-control-MQTT")
-MQTT_MODE = os.getenv("MQTT_MODE", "local")
-SAVE = os.getenv("SAVE", "false") == "true"
+MQTT_FORMAT = os.getenv("MQTT_FORMAT", "Jaka-Control-IK")
+MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")+"/"+ROBOT_UUID
+ROBOT_IP = os.getenv("ROBOT_IP", "10.5.5.10")
+SAVE = os.getenv("SAVE", "true") == "true"
 
 # 基本的に運用時には固定するパラメータ
 t_intv = 0.008
