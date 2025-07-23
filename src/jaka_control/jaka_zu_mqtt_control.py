@@ -11,14 +11,13 @@ import os
 from datetime import datetime
 import numpy as np
 import time
+from dotenv import load_dotenv
 
-## ここでUUID を使いたい
+# TODO: ここでUUID を使いたい
 import uuid
 
-from jaka_control import Jaka_CON
-from jaka_pro_monitor import Jaka_MON
-
-from dotenv import load_dotenv
+from .jaka_zu_control import Jaka_CON
+from .jaka_zu_monitor import Jaka_MON
 
 # パラメータ
 load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))

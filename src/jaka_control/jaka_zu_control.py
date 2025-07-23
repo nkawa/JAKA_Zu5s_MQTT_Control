@@ -16,9 +16,9 @@ import numpy as np
 from dotenv import load_dotenv
 from pyDHgripper import AG95
 
-from jaka_robot import JakaRobot
-from filter import SMAFilter
-from interpolate import DelayedInterpolator
+from .jaka_robot import JakaRobot
+from .filter import SMAFilter
+from .interpolate import DelayedInterpolator
 
 # パラメータ
 load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))

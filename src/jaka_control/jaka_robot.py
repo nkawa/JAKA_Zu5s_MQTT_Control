@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from jkrc import RC, RCFeedBack
+from .jkrc import RC, RCFeedBack
 
 
 logger = logging.getLogger(__name__)
