@@ -173,6 +173,16 @@ class RC:
         """
         joint_pos: unit is degree.
         move_move: 0 for absolute move, 1 for relative move.
+        Since the control cycle time of the controller is 8ms, 
+        it is recommended that the user should send the command 
+        with a period of 8ms too, and continuously. There will be no effect 
+        if the command is sent only once. In case of a poor network, 
+        the command can be sent with a period less than 8ms.
+
+        The upper limit on the Jaka robot joint speed is 180 degrees per second. 
+        If the joint speed exceeds this limit due to the joint angle that 
+        is sent, this command will then fail (invalid).
+         
         """
         assert move_mode in [0, 1]
         cp = ",".join(map(str, joint_pos))
@@ -223,17 +233,26 @@ class RC:
         # ここまででパースの失敗またはエラーコードが0でない場合
         return (ec, recv)
 
-    def joint_move_extend(
+    def joint_move_with_acc(
         self,
         joint_pose: Tuple[float, float, float, float, float, float],
         move_mode: int,
         is_block: bool = True,
         speed: float = 1,
-        accel: float = 1,
+        accel: float = 12.56,
     ) -> Tuple[int] | Tuple[int, Any]:
+        """
+        Joint move with acceleration extension. Not in Python SDK.
+        
+        joint_pose: unit is degree.
+        move_mode: 0 for absolute move, 1 for relative move.
+        is_block: whether to block until the move is finished.
+        # TODO: check whether now is really blocking.
+        speed: speed of the move. unit is rad/s.
+        accel: acceleration of the move. unit is rad/s^2. default is taken from Python SDK.
+        """
         assert move_mode in [0, 1]
         assert is_block
-        assert accel <= 8000, f"accel = {accel} > 8000 is not recommended"
 
         ep = ",".join(map(str, joint_pose))
         send = f'{{"cmdName": "joint_move", "relFlag": {move_mode}, "jointPosition": [{ep}], "speed": {speed}, "accel": {accel}}}'
@@ -248,7 +267,21 @@ class RC:
         speed: float = 1,
         accel: float = 1
     ) -> Tuple[int] | Tuple[int, Any]:
-        """Python SDKにはない"""
+        """
+        TCP move.
+
+        endPosition: [x, y, z, a, b, c] of TCP end.
+        speed: speed of the move. unit is deg/s.
+        accel: acceleration of the move. unit is deg/s^2. recommended to be less than 720.
+
+        end_move command does not move from the current position to the target position point in a straight line.
+        This command first performs the inverse solution to the target point of cartesian space input by the user,
+        and then uses the joint_move command to make the robot joint move to the specified position.
+
+        If you want to move from the current position to the target position point in a straight line, use the moveL command.
+        """
+        assert accel <= 720, f"accel = {accel} > 720 is not recommended"
+
         ep = ",".join(map(str, endPosition))
         send = f'{{"cmdName": "end_move", "endPosition": [{ep}], "speed": {speed}, "accel": {accel}}}'
         ec, ret, recv = self._process(send)
@@ -265,9 +298,20 @@ class RC:
         accel: float = 1,
         tol: float = 1,
     ) -> Tuple[int] | Tuple[int, Any]:
-        # TODO: end_moveとどちらを使う
+        """
+        Linear move. 
+        TCP APIにはlinear_move_extendがなく、moveLで実装
+        # TODO: check which is better, end_move or linear_move_extend.
 
-        # TCP APIにはlinear_move_extendがなく、moveLで実装
+        end_pos: [x, y, z, rx, ry, rz] of TCP end.
+        # TODO: check whether rx, ry, rz and a, b, c are the same.
+        speed: speed of the move. unit is mm/s.
+        accel: acceleration of the move. unit is mm/s^2. recommended to be less than 8000.
+        move_mode: 0 for absolute move, 1 for relative move.
+        is_block: whether to block until the move is finished.
+        tol: Robot joint move endpoint error.
+        # TODO: check whether now is really blocking.
+        """
         assert move_mode in [0, 1]
         assert is_block
         assert accel <= 8000, f"accel = {accel} > 8000 is not recommended"

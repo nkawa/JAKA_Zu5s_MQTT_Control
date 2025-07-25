@@ -1,3 +1,4 @@
+from faulthandler import is_enabled
 import traceback
 from typing import List, Optional
 
@@ -60,6 +61,7 @@ class JakaRobot:
 
     def enable(self) -> None:
         self.logger.info("enable")
+        cnt = 0
         if not self.is_enabled():
             self.enable_robot()
             while not self.is_enabled():
@@ -75,7 +77,7 @@ class JakaRobot:
         precisions: Optional[List[float]] = None,
         check_interval: float = 1,
         timeout: float = 60,
-    ) -> None:
+    ) -> bool:
         self.move_pose(pose)
         if precisions is None:
             precisions = [1, 1, 1, 1, 1, 1]
@@ -102,7 +104,7 @@ class JakaRobot:
         precisions: Optional[List[float]] = None,
         check_interval: float = 1,
         timeout: float = 60,
-    ) -> None:
+    ) -> bool:
         self.move_joint(pose)
         if precisions is None:
             precisions = [1, 1, 1, 1, 1, 1]
@@ -123,39 +125,50 @@ class JakaRobot:
         time.sleep(1)
         return done
 
-    def move_pose(self, pose) -> int:
-        self.logger.debug(("move_pose", pose))
-        return self.client_move.end_move(pose, 10, 10)[0]
+    def move_pose(self, pose) -> None:
+        # absolute pose move
+        res = self.client_move.end_move(pose, speed=10, accel=10)
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
 
-    def move_joint(self, joint) -> int:
-        self.logger.debug(("move_joint", joint))
-        return self.client_move.joint_move_extend(joint, 0, speed=10, accel=10)[0]
+    def move_joint(self, joint) -> None:
+        # absolute joint move
+        res = self.client_move.joint_move_with_acc(joint, 0, speed=10, accel=10)
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
 
     def get_current_pose(self) -> List[float]:
-        ec, pose = self.client_move.get_tcp_position()
-        self.logger.debug(("get_current_pose", pose))
-        return pose
+        res = self.client_move.get_tcp_position()
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
+        return res[1]
 
     def get_current_joint(self) -> List[float]:
-        ec, joint = self.client_move.get_joint_position()
-        self.logger.debug(("get_joint_position", joint))
-        return joint
+        res = self.client_move.get_joint_position()
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
+        return res[1]
 
-    def enter_servo_mode(self):
-        self.logger.info("enter_servo_mode")
-        return self.client_move.servo_move_enable(True)
+    def enter_servo_mode(self) -> None:
+        res = self.client_move.servo_move_enable(True)
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
 
-    def move_joint_servo(self, pose):
+    def move_joint_servo(self, pose) -> None:
+        """differential joint servo move"""
         res = self.client_move.servo_j(pose, 1)
         if res[0] != 0:
             raise JakaRobotError(res[1])
-        return res[0]
 
     def leave_servo_mode(self):
-        self.client_move.servo_move_enable(False)[0]
+        res = self.client_move.servo_move_enable(False)
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
 
-    def disable(self):
-        self.client_move.disable_robot()
+    def disable(self) -> None:
+        res = self.client_move.disable_robot()
+        if res[0] != 0:
+            raise JakaRobotError(res[1])
 
     def stop(self):
         self.client_move.logout()
@@ -196,17 +209,17 @@ class JakaRobot:
         return s
 
     def get_cur_error_info_all(self):
-        # TODO
+        # HACK
         return []
     
     def are_all_errors_stateless(self, errors):
-        # TODO
+        # HACK
         return False
 
     def recover_automatic_enable(self):
-        # TODO
         self.clear_error()
         self.enable()
+        return self.is_enabled()
 
     def jog_joint(self, joint: int, direction: float) -> None:
         joints = self.get_current_joint()
@@ -225,3 +238,8 @@ class JakaRobot:
         if res[0] != 0:
             raise JakaRobotError(res[1])
         return res[1] == 1
+
+    def take_arm(self) -> None:
+        """Not required in Jaka"""
+        # HACK
+        pass

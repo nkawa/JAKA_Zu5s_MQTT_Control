@@ -588,7 +588,7 @@ class Jaka_CON:
                     self.logger.error(f"{self.robot.format_error(e_leave)}")
                     # タイムアウトの場合はスレーブモードは切れているので
                     # 共有メモリを更新する
-                    # TODO
+                    # TODO: どうなるかわからないのでとりあえず
                     if False:
                         self.pose[14] = 0
                     # それ以外は原因不明なのでループは抜ける
@@ -597,7 +597,7 @@ class Jaka_CON:
                         return False
 
                 # タイムアウトの場合は接続からやり直す
-                if False:
+                if True:
                     for i in range(1, 11):
                         try:
                             self.robot.start()
