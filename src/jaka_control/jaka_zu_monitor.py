@@ -19,7 +19,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from .config import SHM_NAME, SHM_SIZE, T_INTV
-from .jaka_robot import JakaRobot
+from .jaka_robot_feedback import JakaRobotFeedback
 from .tools import tool_infos, tool_classes
 
 # パラメータ
@@ -48,11 +48,9 @@ class Jaka_MON:
         pass
 
     def init_robot(self):
-        self.robot = JakaRobot(
+        self.robot = JakaRobotFeedback(
             ip_feed=ROBOT_IP,
-            disable_move=True,
-            # TODO
-            # logger=self.robot_logger,
+            logger=self.robot_logger,
         )
         self.robot.start()
         tool_id = int(os.environ["TOOL_ID"])
