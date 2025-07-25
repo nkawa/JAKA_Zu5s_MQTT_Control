@@ -44,12 +44,19 @@ filter_kind: Literal[
     "moveit_servo_humble",
     "control_and_target_diff",
 ] = "original"
-speed_limits = np.array([240, 200, 240, 300, 300, 475])
-speed_limit_ratio = 0.35
-# NOTE: 加速度制限。スマートTPの最大加速度設定は単位が[rev/s^2]だが、[deg/s^2]とみなして、
-# その値をここで設定すると、エラーが起きにくくなる (観測範囲でエラーがなくなった)
+
+# 速度制限 (deg/s)。スペック上の制限
+speed_limits = 180
+speed_limit_ratio = 0.5
+
+# 加速度制限 (deg/s^2)。
+# JakaのMoveJでの推奨の制限値
+# NOTE: 適切に利用しないと、そのままの値ではかなり制限が小さいと思われる
+# accel_limits = 720
+# NOTE: とりあえず十分大きい値としてCobotta Proの制限値を利用するが要検討
 accel_limits = np.array([4040, 4033.33, 4040, 5050, 5050, 4860])
-accel_limit_ratio = 0.35
+accel_limit_ratio = 0.5
+
 stopped_velocity_eps = 1e-4
 use_interp = True
 n_windows = 10
