@@ -642,10 +642,17 @@ class Jaka_CON:
                         time.sleep(1)
                 # ここまでに接続ができている場合
                 try:
-                    errors = self.robot.get_cur_error_info_all()
-                    self.logger.error(f"Errors in teach pendant: {errors}")
-                    # 自動復帰可能エラー
-                    if self.robot.are_all_errors_stateless(errors):
+                    # Cobotta
+                    # errors = self.robot.get_cur_error_info_all()
+                    # self.logger.error(f"Errors in teach pendant: {errors}")
+                    # # 自動復帰可能エラー
+                    # if self.robot.are_all_errors_stateless(errors):
+                    # Jaka
+                    # NOTE: 現状、エラーによって自動復帰可能かの分類が十分でなく、
+                    # エラーの種類がドキュメントから十分わからないため、
+                    # 緊急停止状態の場合のみ自動復帰せず、それ以外は自動復帰を試みる
+                    ess = self.robot.emergency_stop_status()
+                    if not ess:
                         # 自動復帰を試行。失敗またはエラーの場合は通常モードに戻る。
                         # エラー直後の自動復帰処理に失敗しても、
                         # 同じ復帰処理を手動で行うと成功することもあるので
