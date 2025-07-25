@@ -20,8 +20,21 @@ import threading
 
 logger = logging.getLogger(__name__)
 
-class RCApi:
-    def __init__(self, ip, port, timeout: Optional[float] = 60):
+
+class RC:
+    """
+    JAKAの制御用API。
+    TCP/IPプロトコルを用いて実装。
+    Python SDKのAPIを模倣しているが、実際にSDKとの比較はしていない。
+    特にエラーコードが0でない場合の返り値は、SDKではエラーコードの可能性があるが、
+    それでは不便なため、TCP/IPプロトコルの結果も返すようにしている。
+    """
+    def __init__(
+        self,
+        ip: str = "10.5.5.100",
+        port: int = 10001,
+        timeout: Optional[float] = 60,
+    ) -> None:
         self._ip = ip
         self._port = port
         self._socket = 0
@@ -92,125 +105,123 @@ class RCApi:
                 sleep(1)
         return socket_
 
+    def login(self) -> Tuple[int] | Tuple[int, Any]:
+        try:
+            self._login()
+        except Exception as e:
+            return (-1, str(e))
+        return (0,)
 
-class RC(RCApi):
-    """制御用クライアント。"""
-    def __init__(self, ip: str = "10.5.5.100", port: int = 10001) -> None:
-        super().__init__(ip, port)
-    
-    def login(self):
-        return self._login()
-
-    def power_on(self) -> Tuple[int]:
+    def power_on(self) -> Tuple[int] | Tuple[int, Any]:
         send = '{"cmdName": "power_on"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
-    def enable_robot(self) -> Tuple[int]:
+    def power_off(self) -> Tuple[int] | Tuple[int, Any]:
+        send = '{"cmdName": "power_off"}'
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
+
+    def enable_robot(self) -> Tuple[int] | Tuple[int, Any]:
         send = '{"cmdName": "enable_robot"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_results(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
-    def disable_robot(self) -> Tuple[int]:
+    def disable_robot(self) -> Tuple[int] | Tuple[int, Any]:
         send = '{"cmdName": "disable_robot"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
-    def clear_error(self):
+    def clear_error(self) -> Tuple[int] | Tuple[int, Any]:
         send = '{"cmdName":"clear_error"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
-    def collision_recover(self):
-        return self.clear_error()
-
-    def is_in_servomove(self) -> Tuple[int, int]:
-        # 元のPython APIにはないが、TCP APIにある
+    def is_in_servomove(self) -> Tuple[int, bool] | Tuple[int, Any]:
+        """Python SDKにはない"""
         send = '{"cmdName":"is_in_servomove"}'
-        recv = self._sendRecvMsg(send)
-        ec = self._parse_error_code(recv)[0]
-        ps = self._parse_results(recv)["in_servomove"]
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        ps = ret["in_servomove"]
         return (ec, ps)
 
-    def servo_move_enable(self, enable: bool) -> Tuple[int]:
+    def servo_move_enable(self, enable: bool) -> Tuple[int] | Tuple[int, Any]:
         rf = 1 if enable else 0
         send = f'{{"cmdName": "servo_move", "relFlag": {rf}}}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
     def servo_j(
         self,
         joint_pos: Tuple[float, float, float, float, float, float],
         move_mode: int,
-    ) -> Tuple[int]:
-        if move_mode not in [0, 1]:
-            print("move_mode must be either of [0, 1]")
-            return (-1,)
+        step_num: int = 1,
+    ) -> Tuple[int] | Tuple[int, Any]:
+        """
+        joint_pos: unit is degree.
+        move_move: 0 for absolute move, 1 for relative move.
+        """
+        assert move_mode in [0, 1]
         cp = ",".join(map(str, joint_pos))
-        sn = 1
+        sn = step_num
         send = f'{{"cmdName": "servo_j", "jointPosition": [{cp}], "relFlag": {move_mode}, "stepNum": {sn}}}'
         recv = self._sendRecvMsg(send)
-        return self._parse_results(recv)
+        ec = self._parse_error_code_fast(recv)
+        if ec == 0:
+            return (ec,)
+        else:
+            return (ec, recv)
 
-    def protective_stop_status(self) -> Tuple[int, int]:
-        # 元のPython APIにはないが、TCP APIにある
-        send = f'{"cmdName": "protective_stop_status"}'
-        recv = self._sendRecvMsg(send)
-        ec = self._parse_results(recv)["errorCode"]
-        ps = self._parse_results(recv)["protective_stop"]
-        return (ec, ps)
-
-    def servo_p(
-        self,
-        cartesian_pose: Tuple[float, float, float, float, float, float],
-        move_mode: int,
-    ) -> Tuple[int]:
-        if move_mode not in [0, 1]:
-            print("move_mode must be either of [0, 1]")
-            return (-1,)
-        cp = ",".join(map(str, cartesian_pose))
-        sn = 1
-        send = f'{{"cmdName": "servo_p", "catPosition": [{cp}], "relFlag": {move_mode}, "stepNum": {sn}}}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
-
-    def get_joint_position(self):
+    def get_joint_position(self) -> Tuple[
+        int, Tuple[float, float, float, float, float, float]
+    ] | Tuple[int, Any]:
         send = '{"cmdName":"get_joint_pos"}'
         recv = self._sendRecvMsg(send)
-        ec = self._parse_error_code(recv)[0]
-        # Assume "joint_pos": [j1,j2,j3,j4,j5,j6]
-        query = '"joint_pos": ['
-        i = recv.find(query)
-        if i == -1:
-            ec = -1
-            return (ec,)
-        j = i + len(query)
-        k = recv[j:].find(']')
-        if k == -1:
-            ec = -1
-            return (ec,)
-        joint_pos = [float(x) for x in recv[j:][:k].split(",")]
-        return (ec, joint_pos)
+        ec = self._parse_error_code_fast(recv)
+        if ec == 0:
+            # Assume "joint_pos": [j1,j2,j3,j4,j5,j6]
+            query = '"joint_pos": ['
+            i = recv.find(query)
+            if i != -1:
+                j = i + len(query)
+                k = recv[j:].find(']')
+                if k != -1:
+                    joint_pos = [float(x) for x in recv[j:][:k].split(",")]
+                    return (ec, joint_pos)
+        # ここまででパースの失敗またはエラーコードが0でない場合
+        return (ec, recv)
 
-    def get_tcp_position(
-        self
-    ) -> Tuple[int, Tuple[float, float, float, float, float, float]]:
-        send = '{"cmdName": "get_tcp_pos"}'
+    def get_tcp_position(self) -> Tuple[
+        int, Tuple[float, float, float, float, float, float]
+    ] | Tuple[int, Any]:
+        send = '{"cmdName":"get_tcp_pos"}'
         recv = self._sendRecvMsg(send)
-        ec = self._parse_error_code(recv)[0]
-        # Assume "tcp_pos": [x,y,z,a,b,c]
-        query = '"tcp_pos": ['
-        i = recv.find(query)
-        if i == -1:
-            ec = -1
-            return (ec,)
-        j = i + len(query)
-        k = recv[j:].find(']')
-        if k == -1:
-            ec = -1
-            return (ec,)
-        tcp_pos = [float(x) for x in recv[j:][:k].split(",")]
-        return (ec, tcp_pos)
+        ec = self._parse_error_code_fast(recv)
+        if ec == 0:
+            # Assume "tcp_pos": [x,y,z,a,b,c]
+            query = '"tcp_pos": ['
+            i = recv.find(query)
+            if i != -1:
+                j = i + len(query)
+                k = recv[j:].find(']')
+                if k != -1:
+                    joint_pos = [float(x) for x in recv[j:][:k].split(",")]
+                    return (ec, joint_pos)
+        # ここまででパースの失敗またはエラーコードが0でない場合
+        return (ec, recv)
 
     def joint_move_extend(
         self,
@@ -219,34 +230,31 @@ class RC(RCApi):
         is_block: bool = True,
         speed: float = 1,
         accel: float = 1,
-    ) -> Tuple[int]:
-        if move_mode not in [0, 1]:
-            print("move_mode must be either of [0, 1]")
-            return (-1,)
-
-        if not is_block:
-            print("NotImplemented")
-            return (-1,)
-        
-        if accel > 8000:
-            print(f"accel > 8000 is not recommended: {accel}")
-            return (-1,)
+    ) -> Tuple[int] | Tuple[int, Any]:
+        assert move_mode in [0, 1]
+        assert is_block
+        assert accel <= 8000, f"accel = {accel} > 8000 is not recommended"
 
         ep = ",".join(map(str, joint_pose))
         send = f'{{"cmdName": "joint_move", "relFlag": {move_mode}, "jointPosition": [{ep}], "speed": {speed}, "accel": {accel}}}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
     def end_move(
         self,
         endPosition: Tuple[float, float, float, float, float, float],
         speed: float = 1,
         accel: float = 1
-    ) -> Tuple[int]:
+    ) -> Tuple[int] | Tuple[int, Any]:
+        """Python SDKにはない"""
         ep = ",".join(map(str, endPosition))
         send = f'{{"cmdName": "end_move", "endPosition": [{ep}], "speed": {speed}, "accel": {accel}}}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
     def linear_move_extend(
         self,
@@ -256,42 +264,91 @@ class RC(RCApi):
         speed: float = 1,
         accel: float = 1,
         tol: float = 1,
-    ) -> Tuple[int]:
-        # TCP APIにはlinear_move_extendがなく、moveLで実装
-        if move_mode not in [0, 1]:
-            print("move_mode must be either of [0, 1]")
-            return (-1,)
+    ) -> Tuple[int] | Tuple[int, Any]:
+        # TODO: end_moveとどちらを使う
 
-        if not is_block:
-            print("NotImplemented")
-            return (-1,)
-        
-        if accel > 8000:
-            print(f"accel > 8000 is not recommended: {accel}")
-            return (-1,)
+        # TCP APIにはlinear_move_extendがなく、moveLで実装
+        assert move_mode in [0, 1]
+        assert is_block
+        assert accel <= 8000, f"accel = {accel} > 8000 is not recommended"
 
         ep = ",".join(map(str, end_pos))
         send = f'{{"cmdName": "moveL", "relFlag": {move_mode}, "cartPosition": [{ep}], "speed": {speed}, "accel": {accel}, "tol": {tol}}}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        return (ec,)
 
-    def motion_abort(self) -> Tuple[int]:
-        send = '{"cmdName": "stop_program"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+    def logout(self) -> Tuple[int] | Tuple[int, Any]:
+        try:
+            self._logout_socket()
+            return (0,)
+        except Exception as e:
+            return (-1, str(e))
+
+    def get_version(self) -> Tuple[int, str] | Tuple[int, Any]:
+        """コントローラーのバージョンを取得する。Python SDKにはない"""       
+        send = '{"cmdName": "get_version"}'
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        version = ret["version"]
+        return (ec, version)
+
+    def emergency_stop_status(self) -> Tuple[int, int] | Tuple[int, Any]:
+        """
+        Whether the robot is in an emergency stop state.
+        0 means not in an emergency stop state.
+        1 means in an emergency stop state.
+        """
+        send = '{"cmdName": "emergency_stop_status"}'
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        emergency_stop = ret["emergency_stop"]
+        return (ec, emergency_stop)
+
+    # def protective_stop_status(self) -> Tuple[int, int]:
+    #     # 元のPython APIにはないが、TCP APIにある
+    #     send = f'{"cmdName": "protective_stop_status"}'
+    #     recv = self._sendRecvMsg(send)
+    #     ec = self._parse_results(recv)["errorCode"]
+    #     ps = self._parse_results(recv)["protective_stop"]
+    #     return (ec, ps)
+
+    # def servo_p(
+    #     self,
+    #     cartesian_pose: Tuple[float, float, float, float, float, float],
+    #     move_mode: int,
+    # ) -> Tuple[int]:
+    #     if move_mode not in [0, 1]:
+    #         print("move_mode must be either of [0, 1]")
+    #         return (-1,)
+    #     cp = ",".join(map(str, cartesian_pose))
+    #     sn = 1
+    #     send = f'{{"cmdName": "servo_p", "catPosition": [{cp}], "relFlag": {move_mode}, "stepNum": {sn}}}'
+    #     recv = self._sendRecvMsg(send)
+    #     return self._parse_error_code(recv)
+
+    # def motion_abort(self) -> Tuple[int]:
+    #     send = '{"cmdName": "stop_program"}'
+    #     recv = self._sendRecvMsg(send)
+    #     return self._parse_error_code(recv)
     
-    def get_robot_state(self):
+    def get_robot_state(self) -> Tuple[int, int, int] | Tuple[int, Any]:
         send = '{"cmdName": "get_robot_state"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_results(recv)
+        ec, ret, recv = self._process(send)
+        if ec != 0:
+            return (ec, recv)
+        enabled = ret["enable"] == "robot_enabled"
+        powered_on = ret["power"] == "powered_on"
+        return (ec, int(powered_on), int(enabled))
 
-    def logout(self) -> Tuple[int]:
-        return self._logout_sdk()
-
-    def _logout_sdk(self) -> None:
-        send = '{"cmdName": "quit"}'
-        recv = self._sendRecvMsg(send)
-        return self._parse_error_code(recv)
+    # def _logout_sdk(self) -> None:
+    #     # NOTE: "Quit connection"とのことだが具体的にどうなっているかは不明
+    #     send = '{"cmdName": "quit"}'
+    #     recv = self._sendRecvMsg(send)
+    #     return self._parse_error_code(recv)
 
     def _logout_socket(self) -> None:
         self._close()
@@ -299,8 +356,8 @@ class RC(RCApi):
     def _parse_results(self, valueRecv: str) -> Dict[str, Any]:
         # TCP API結果をパースする。エラーコード以外が必要な場合に使う。
         return json.loads(valueRecv)
-
-    def _parse_error_code(self, valueRecv: str) -> Tuple[int]:
+    
+    def _parse_error_code_fast(self, valueRecv: str) -> int:
         # TCP API結果をパースする。エラーコードのみ必要な場合に使う。より高速。
         query = '"errorCode": "'
         i = valueRecv.find(query)
@@ -309,68 +366,11 @@ class RC(RCApi):
         else:
             j = i + len(query)
             k = valueRecv[j:].find('"')
-            return (int(valueRecv[j:][:k]),)
+            error_code = valueRecv[j:][:k]
+            return int(error_code)
 
-class RCFeedBack(RCApi):
-    """状態取得用クライアント。"""
-    def __init__(self, ip: str = "10.5.5.100", port: int = 10000) -> None:
-        super().__init__(ip, port)
-        self._callback = None
-
-    def login(self):
-        ret = self._login()
-        self.__MyType = []
-        self.__Lock = threading.Lock()
-        feed_thread = threading.Thread(target=self.recvFeedData)
-        feed_thread.daemon = True
-        feed_thread.start()
-        sleep(1)
-        return ret
-
-    def recvFeedData(self):
-        """
-        平均約30ms間隔で状態を取得する。
-        """
-        buffer = b''
-        sep = b'{"len":'
-        while True:
-            unit_data = b''
-            while True:
-                # 単位データの先頭を探す
-                if sep in buffer:
-                    i = buffer.index(sep)
-                    # buffer = sep + ...
-                    buffer = buffer[i:]
-                # 単位データの末端を探す
-                # この時点でバッファ中に単位データが2つあるとき
-                # 1つ目の単位データを取り出す
-                # HACK: buffer[1:] = sep[1:] + ...に対しては
-                # bufferの先頭のsepにはヒットしない
-                if sep in buffer[1:]:
-                    # HACK: 上のハックによるインデックスを元に戻す
-                    i = buffer[1:].index(sep) + 1
-                    unit_data = buffer[:i]
-                    buffer = buffer[i:]
-                # 単位データが取り出せれば抜ける
-                if unit_data != b'':
-                    break
-                # なければデータをバッファに追加する
-                data = self._socket.recv(4096)
-                if not data:
-                    self._socket = self._reConnect(self._ip, self._port)
-                    buffer = b''
-                    # 接続が解除されたらバッファはリセット
-                    continue
-                buffer += data            
-            with self.__Lock:
-                self.__MyType = json.loads(unit_data.decode())
-                self.__MyType["timestamp"] = perf_counter()
-                if self._callback is not None:
-                    self._callback(self.__MyType)
-
-    def feedBackData(self):
-        with self.__Lock:
-            return self.__MyType
-
-    def set_callback(self, callback):
-        self._callback = callback
+    def _process(self, send: str) -> Tuple[int, Any, str]:
+        recv = self._sendRecvMsg(send)
+        ret = self._parse_results(recv)
+        ec = int(ret["errorCode"])
+        return (ec, ret, recv)

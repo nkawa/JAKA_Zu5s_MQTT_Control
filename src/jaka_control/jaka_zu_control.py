@@ -61,6 +61,8 @@ t_intv = T_INTV
 n_windows *= int(0.008 / t_intv)
 reset_default_state = True
 default_joint = [4.7031, -0.6618, 105.5149, 0.0001, 75.1440, 94.7038]
+# defPose = [50.67851, -120.33679, 452.7194, 166.39565, -18.02921, -130.30474]
+# defJoint = [-179.024618, 40.256525, 107.558967, 144.281236, -94.064602, 44.242293]
 min_joint_limit = [-360, -85, -175, -85, -360, -360]
 max_joint_limit = [360, 265, 175, 265, 360, 360]
 min_joint_limit = np.array(min_joint_limit)
@@ -91,9 +93,7 @@ class Jaka_CON:
         try:
             self.robot = JakaRobot(
                 ip_move=ROBOT_IP,
-                disable_feed=True,
-                # TODO
-                # logger=self.robot_logger,
+                logger=self.robot_logger,
             )
             self.robot.start()
             self.robot.clear_error()
@@ -455,7 +455,7 @@ class Jaka_CON:
                 try:
                     self.robot.move_joint_servo(target_diff_speed_limited.tolist())
                 except Exception as e:
-                    # TODO
+                    # JAKAでは無視できるエラーがあるか現状不明なためすべてraiseする
                     raise e
 
                 if self.pose[13] == 1:
