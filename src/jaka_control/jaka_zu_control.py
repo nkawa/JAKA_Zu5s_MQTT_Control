@@ -1087,7 +1087,10 @@ class Jaka_CON:
         else:
             handler = logging.StreamHandler()
         self.robot_logger.addHandler(handler)
-        self.robot_logger.setLevel(logging.WARNING)
+        if MOCK:
+            self.robot_logger.setLevel(logging.INFO)
+        else:
+            self.robot_logger.setLevel(logging.WARNING)
 
     def run_proc(self, control_pipe, slave_mode_lock, log_queue):
         self.setup_logger(log_queue)
