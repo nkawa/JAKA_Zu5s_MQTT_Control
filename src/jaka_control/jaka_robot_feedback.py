@@ -9,6 +9,8 @@ import time
 
 import numpy as np
 
+from jaka_control.config import DEFAULT_JOINT
+
 from .jkrc_feedback import RCFeedBack
 
 
@@ -154,7 +156,7 @@ class MockJakaRobotFeedback:
         self.__Lock = threading.Lock()
 
         self.mock_pose = [0.0] * 6
-        self.mock_joint = [0.0] * 6
+        self.mock_joint = DEFAULT_JOINT
         self.mock_feed = {
             "errcode": 0,
             "errmsg": "",

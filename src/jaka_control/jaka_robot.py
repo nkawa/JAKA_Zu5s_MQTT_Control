@@ -8,6 +8,8 @@ import time
 
 import numpy as np
 
+from jaka_control.config import DEFAULT_JOINT
+
 from .jkrc import RC
 
 
@@ -255,7 +257,7 @@ class MockJakaRobot:
             self.logger = logger
         self.name = name
         self.mock_pose = [0.0] * 6
-        self.mock_joint = [0.0] * 6
+        self.mock_joint = DEFAULT_JOINT
         self.enabled = False
         self.powered_on = False
         self.in_servomove = False
