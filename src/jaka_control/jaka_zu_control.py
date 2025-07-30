@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from pyDHgripper import AG95
 
 from .jaka_robot import JakaRobot, MockJakaRobot
-from .config import SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
+from .config import DEFAULT_JOINT, SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
 from .filter import SMAFilter
 from .interpolate import DelayedInterpolator
 from .tools import tool_infos, tool_classes, tool_base
@@ -68,9 +68,7 @@ elif filter_kind == "target":
 t_intv = T_INTV
 n_windows *= int(0.008 / t_intv)
 reset_default_state = True
-default_joint = [4.7031, -0.6618, 105.5149, 0.0001, 75.1440, 94.7038]
-# defPose = [50.67851, -120.33679, 452.7194, 166.39565, -18.02921, -130.30474]
-# defJoint = [-179.024618, 40.256525, 107.558967, 144.281236, -94.064602, 44.242293]
+default_joint = DEFAULT_JOINT
 min_joint_limit = [-360, -85, -175, -85, -360, -360]
 max_joint_limit = [360, 265, 175, 265, 360, 360]
 min_joint_limit = np.array(min_joint_limit)
