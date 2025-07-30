@@ -301,7 +301,7 @@ class RC:
             self._logout_socket()
             return (0,)
         except Exception as e:
-            return (-1, str(e))
+            raise e
 
     def get_version(self) -> Tuple[int, str] | Tuple[int, Any]:
         """コントローラーのバージョンを取得する。Python SDKにはない"""       
