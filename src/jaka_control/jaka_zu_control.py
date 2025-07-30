@@ -17,7 +17,8 @@ import numpy as np
 from dotenv import load_dotenv
 from pyDHgripper import AG95
 
-from .jaka_robot import JakaRobot, MockJakaRobot
+from .jaka_robot import JakaRobot
+from .jaka_robot_mock import MockJakaRobot
 from .config import DEFAULT_JOINT, SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
 from .filter import SMAFilter
 from .interpolate import DelayedInterpolator

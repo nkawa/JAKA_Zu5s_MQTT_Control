@@ -19,7 +19,8 @@ import numpy as np
 from dotenv import load_dotenv
 
 from .config import SHM_NAME, SHM_SIZE, T_INTV
-from .jaka_robot_feedback import JakaRobotFeedback, MockJakaRobotFeedback
+from .jaka_robot import JakaRobotFeedback
+from .jaka_robot_mock import MockJakaRobotFeedback
 from .tools import tool_infos, tool_classes
 
 # パラメータ
