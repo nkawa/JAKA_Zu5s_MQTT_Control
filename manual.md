@@ -14,8 +14,12 @@ NOTE(20250723): 作成中
 
 ```
 # PCのアドレス
+# デバイスにアドレスを設定 (一時的、再起動すると消える)
 sudo ip addr add 10.5.5.1/24 dev <device-name>
+# デバイスを有効にする
 sudo ip link set <device-name> up
+# デバイスの状態、通信可能か (state UP)、アドレスが設定されているか確認する@
+ip addr show <device-name>
 # ロボットのアドレス
 ping 10.5.5.100
 ```
