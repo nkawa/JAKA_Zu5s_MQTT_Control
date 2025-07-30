@@ -44,13 +44,13 @@ class JakaRobotFeedback:
 
     def start(self):
         self.logger.info("start")
-        self.latest_feed = None
+        self.latest_feed = {}
         self.client_feed.login()
         self.client_feed.set_callback(self._on_feed)
         # 最初のフィードが来るまで待つ
         while True:
             with self.__Lock:
-                if self.latest_feed is not None:
+                if not self.latest_feed:
                     return
             time.sleep(0.008)
 
@@ -117,8 +117,13 @@ class JakaRobotFeedback:
     def get_cur_error_info_all(self) -> List[dict]:
         with self.__Lock:
             data = self.latest_feed
-            error_related_feedback = self._get_error_related_feedback(data)
-            return [error_related_feedback]
+            errcode = data["errcode"]
+            is_error = str(errcode) != "0"
+            if is_error:
+                error_related_feedback = self._get_error_related_feedback(data)
+                return [error_related_feedback]
+            else:
+                return []
 
     def are_all_errors_stateless(self, errors: List[dict]) -> bool:
         return all(not error["emergency_stop"] for error in errors)
@@ -227,8 +232,13 @@ class MockJakaRobotFeedback:
     def get_cur_error_info_all(self) -> List[dict]:
         with self.__Lock:
             data = self.latest_feed
-            error_related_feedback = self._get_error_related_feedback(data)
-            return [error_related_feedback]
+            errcode = data["errcode"]
+            is_error = str(errcode) != "0"
+            if is_error:
+                error_related_feedback = self._get_error_related_feedback(data)
+                return [error_related_feedback]
+            else:
+                return []
 
     def are_all_errors_stateless(self, errors: List[dict]) -> bool:
         return all(not error["emergency_stop"] for error in errors)
