@@ -57,7 +57,7 @@ class RCFeedBack:
 
     def login(self):
         ret = self._login()
-        self.__MyType = []
+        self.__MyType = {}
         self.__Lock = threading.Lock()
         feed_thread = threading.Thread(target=self.recvFeedData)
         feed_thread.daemon = True
@@ -67,8 +67,14 @@ class RCFeedBack:
 
     def recvFeedData(self):
         """
-        平均約30ms間隔で状態を取得する。
+        デフォルトの設定で、実測した限りでは、平均約30ms間隔で状態を取得する。
+        出力するデータの種類を減らす設定が該当バージョンで可能ならば、
+        高速化が期待できる。
         """
+        # 受信データは、'<unit_data><unit_data>...'
+        # (具体的には'{"len": ...}{"len": ...}...')の形式で送られてくるが、
+        # 1回のソケット受信では途中の切り取りを受信するため、
+        # バッファを用意して、単位データごとに切り出して処理する。
         buffer = b''
         sep = b'{"len":'
         while True:
