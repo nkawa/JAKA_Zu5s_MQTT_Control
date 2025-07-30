@@ -88,8 +88,6 @@ if save_control:
     save_path = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_control.jsonl"
     f = open(save_path, "w")
 
-class ControlException(Exception):
-    pass
 
 class Jaka_CON:
     def __init__(self):

@@ -244,6 +244,9 @@ class Jaka_MON:
                     elif self.hand_name == "plate_holder":
                         width = None
                         force = None
+                    else:
+                        width = None
+                        force = None
 
             # モータがONか
             try:
