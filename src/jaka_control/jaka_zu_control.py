@@ -17,7 +17,7 @@ import numpy as np
 from dotenv import load_dotenv
 from pyDHgripper import AG95
 
-from .jaka_robot import JakaRobot
+from .jaka_robot import JakaRobot, MockJakaRobot
 from .config import SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
 from .filter import SMAFilter
 from .interpolate import DelayedInterpolator
@@ -29,6 +29,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__),'.env'))
 ROBOT_IP = os.getenv("ROBOT_IP", "10.5.5.100")
 SAVE = os.getenv("SAVE", "true") == "true"
 MOVE = os.getenv("MOVE", "true") == "true"
+MOCK = os.getenv("MOCK", "false") == "true"
 
 # 基本的に運用時には固定するパラメータ
 # 実際にロボットを制御するかしないか (VRとの結合時のデバッグ用)
@@ -89,6 +90,14 @@ if save_control:
     f = open(save_path, "w")
 
 
+class MockAG95:
+    def __init__(self):
+        self.pos = 1000
+
+    def set_pos(self, pos: int) -> None:
+        self.pos = pos
+
+
 class Jaka_CON:
     def __init__(self):
         self.default_joint = default_joint
@@ -96,7 +105,11 @@ class Jaka_CON:
 
     def init_robot(self):
         try:
-            self.robot = JakaRobot(
+            if MOCK:
+                robot = MockJakaRobot
+            else:
+                robot = JakaRobot
+            self.robot = robot(
                 ip_move=ROBOT_IP,
                 logger=self.robot_logger,
             )
@@ -104,7 +117,10 @@ class Jaka_CON:
             self.robot.clear_error()
             tool_id = int(os.environ["TOOL_ID"])
             self.find_and_setup_hand(tool_id)
-            self.gripper = AG95()
+            if MOCK:
+                self.gripper = MockAG95()
+            else:
+                self.gripper = AG95()
         except Exception as e:
             self.logger.error("Error in initializing robot: ")
             self.logger.error(f"{self.robot.format_error(e)}")
@@ -189,7 +205,10 @@ class Jaka_CON:
             #     continue
 
             # 関節の状態値
-            state = self.pose[:6].copy()
+            if MOCK:
+                state = self.robot.get_current_joint()
+            else:
+                state = self.pose[:6].copy()
 
             # 目標値
             target = self.pose[6:12].copy()

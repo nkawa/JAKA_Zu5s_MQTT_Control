@@ -19,7 +19,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from .config import SHM_NAME, SHM_SIZE, T_INTV
-from .jaka_robot_feedback import JakaRobotFeedback
+from .jaka_robot_feedback import JakaRobotFeedback, MockJakaRobotFeedback
 from .tools import tool_infos, tool_classes
 
 # パラメータ
@@ -36,6 +36,7 @@ MQTT_FORMAT = os.getenv("MQTT_FORMAT", "Jaka-Control-IK")
 MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")+"/"+ROBOT_UUID
 ROBOT_IP = os.getenv("ROBOT_IP", "10.5.5.10")
 SAVE = os.getenv("SAVE", "true") == "true"
+MOCK = os.getenv("MOCK", "false") == "true"
 
 # 基本的に運用時には固定するパラメータ
 save_state = SAVE
@@ -43,12 +44,17 @@ if save_state:
     save_path = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_status.jsonl"
     f = open(save_path, "w")
 
+
 class Jaka_MON:
     def __init__(self):
         pass
 
     def init_robot(self):
-        self.robot = JakaRobotFeedback(
+        if MOCK:
+            robot = MockJakaRobotFeedback
+        else:
+            robot = JakaRobotFeedback
+        self.robot = robot(
             ip_feed=ROBOT_IP,
             logger=self.robot_logger,
         )
