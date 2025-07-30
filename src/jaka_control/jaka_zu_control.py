@@ -610,43 +610,17 @@ class Jaka_CON:
                 except Exception as e_leave:
                     self.logger.error("Error leaving servo mode")
                     self.logger.error(f"{self.robot.format_error(e_leave)}")
-                    # タイムアウトの場合はスレーブモードは切れているので
-                    # 共有メモリを更新する
-                    # TODO: どうなるかわからないのでとりあえず
-                    if False:
-                        self.pose[14] = 0
-                    # それ以外は原因不明なのでループは抜ける
-                    else:
-                        self.pose[16] = 0
-                        return False
+                    # スレーブモードから抜けられているかわからないので
+                    # モニタプロセスでエラーが補足できているかは保証されない
+                    # 抜けても抜けられなくても再接続すればうまく行くかもしれない
 
-                # タイムアウトの場合は接続からやり直す
+                # タイムアウトの有無によらず再接続する
                 if True:
                     for i in range(1, 11):
                         try:
                             self.robot.start()
                             self.robot.clear_error()
-
-                            # NOTE: タイムアウトした場合の数回に1回、
-                            # 制御権が取得できない場合がある。しかし、
-                            # このメソッドのこの例外から抜けた後に
-                            # GUIでClearError -> Enable -> StartMQTTControl
-                            # とすると制御権が取得できる。
-                            # ここで制御権を取得しても、GUIから制御権を取得しても
-                            # 内部的には同じ関数を呼んでいるので原因不明
-                            # (ソケットやbCAPClientのidが両者で同じことも確認済み)
-                            # 0. 元
                             self.robot.take_arm()
-                            # 1. ここをイネーブルにしても変わらない
-                            # self.robot.enable_robot(ext_speed=speed_normal)
-                            # 2. manual_resetを追加しても変わらない
-                            # self.robot.manual_reset()
-                            # self.robot.take_arm()
-                            # 3. 待っても変わらない
-                            # time.sleep(5)
-                            # self.robot.take_arm()
-                            # time.sleep(5)
-
                             self.find_and_setup_hand(self.tool_id)
                             self.logger.info(
                                 "Reconnected to robot successfully"
@@ -664,16 +638,11 @@ class Jaka_CON:
                                 self.pose[16] = 0
                                 return False
                         time.sleep(1)
-                # ここまでに接続ができている場合
+
+                # 再イネーブルする
                 try:
-                    # Cobotta
-                    # errors = self.robot.get_cur_error_info_all()
-                    # self.logger.error(f"Errors in teach pendant: {errors}")
-                    # # 自動復帰可能エラー
-                    # if self.robot.are_all_errors_stateless(errors):
-                    # Jaka
-                    # NOTE: 現状、エラーによって自動復帰可能かの分類が十分でなく、
-                    # エラーの種類がドキュメントから十分わからないため、
+                    # NOTE: Jakaでは、どのエラーが自動復帰可能かの分類が
+                    # ドキュメント、実験ともに不足していて現状よくわからないので、
                     # 緊急停止状態の場合のみ自動復帰せず、それ以外は自動復帰を試みる
                     ess = self.robot.emergency_stop_status()
                     if not ess:

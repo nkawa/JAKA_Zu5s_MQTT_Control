@@ -78,8 +78,8 @@ class Jaka_MON:
         self.tool_id = tool_id
 
     def reconnect_after_timeout(self, e: Exception) -> bool:
-        # TODO
-        return False
+        # JakaはRCFeedback内でタイムアウト時に再接続を行うのでこの処理は不要
+        return True
 
     def init_realtime(self):
         os_used = sys.platform
