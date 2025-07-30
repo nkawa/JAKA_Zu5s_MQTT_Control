@@ -20,50 +20,53 @@ class RCFeedBack:
     ) -> None:
         self._ip = ip
         self._port = port
-        self._socket = 0
+        self._socket = None
         self._timeout = timeout
-        self.__globalLock = threading.Lock()
         self._callback = None
 
-    def _login(self):
-        try:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._socket.settimeout(self._timeout)
-            self._socket.connect((self._ip, self._port))
-        except Exception:
-            logger.error("_login failed")
-
     def _close(self):
-        if (self._socket != 0):
+       if self._socket is not None:
             try:
                 self._socket.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                logger.exception("Error while socket shutdown")
+            try:
                 self._socket.close()
-            except socket.error as e:
-                print(f"Error while closing socket: {e}")
+            except Exception:
+                logger.exception("Error while socket close")
+            self._socket = None
 
     def __del__(self):
         self._close()
 
-    def _reConnect(self, ip, port):
+    def _reConnect(self):
         while True:
             try:
-                socket_ = socket.socket()
-                socket_.settimeout(self._timeout)
-                socket_.connect((ip, port))
-                break
+                self._close()
+                self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._socket.settimeout(self._timeout)
+                self._socket.connect((self._ip, self._port))
             except Exception:
+                self._close()
+                logger.exception("Error while reconnecting")
                 sleep(1)
-        return socket_
 
     def login(self):
-        ret = self._login()
+        try:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket.settimeout(self._timeout)
+            self._socket.connect((self._ip, self._port))
+        except Exception as e:
+            if self._socket is not None:
+                self._socket.close()
+                self._socket = None
+                raise e
         self.__MyType = {}
         self.__Lock = threading.Lock()
         feed_thread = threading.Thread(target=self.recvFeedData)
         feed_thread.daemon = True
         feed_thread.start()
         sleep(1)
-        return ret
 
     def recvFeedData(self):
         """
@@ -101,7 +104,7 @@ class RCFeedBack:
                 # なければデータをバッファに追加する
                 data = self._socket.recv(4096)
                 if not data:
-                    self._socket = self._reConnect(self._ip, self._port)
+                    self._reConnect()
                     buffer = b''
                     # 接続が解除されたらバッファはリセット
                     continue

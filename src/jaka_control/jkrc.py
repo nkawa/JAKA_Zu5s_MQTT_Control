@@ -37,53 +37,22 @@ class RC:
     ) -> None:
         self._ip = ip
         self._port = port
-        self._socket = 0
+        self._socket = None
         self._timeout = timeout
         self.__globalLock = threading.Lock()
 
-    def _login(self):
-        try:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._socket.settimeout(self._timeout)
-            self._socket.connect((self._ip, self._port))
-        except Exception:
-            logger.error("_login failed")
-
     def _send_data(self, string):
-        try:
-            self._socket.send(str.encode(string, 'utf-8'))
-        except Exception:
-            logger.error("_send_data failed")
-            while True:
-                try:
-                    self._socket = self._reConnect(self._ip, self._port)
-                    self._socket.send(str.encode(string, 'utf-8'))
-                    break
-                except Exception:
-                    sleep(1)
+        assert self._socket is not None, "Socket is not connected"
+        self._socket.send(str.encode(string, 'utf-8'))
 
     def _wait_reply(self):
-        data = ""
-        try:
-            data = self._socket.recv(1024)
-        except Exception as e:
-            print(e)
-            self._socket = self._reConnect(self._ip, self._port)
-
-        finally:
-            if len(data) == 0:
-                data_str = data
-            else:
-                data_str = str(data, encoding="utf-8")
-            return data_str
-
-    def _close(self):
-        if (self._socket != 0):
-            try:
-                self._socket.shutdown(socket.SHUT_RDWR)
-                self._socket.close()
-            except socket.error as e:
-                print(f"Error while closing socket: {e}")
+        assert self._socket is not None, "Socket is not connected"
+        data = self._socket.recv(1024)
+        if len(data) == 0:
+            data_str = data
+        else:
+            data_str = str(data, encoding="utf-8")
+        return data_str
 
     def _sendRecvMsg(self, string):
         with self.__globalLock:
@@ -91,25 +60,29 @@ class RC:
             recvData = self._wait_reply()
             return recvData
 
+    def _close(self):
+        if self._socket is not None:
+            try:
+                self._socket.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                logger.exception("Error while socket shutdown")
+            try:
+                self._socket.close()
+            except Exception:
+                logger.exception("Error while socket close")
+            self._socket = None
+
     def __del__(self):
         self._close()
 
-    def _reConnect(self, ip, port):
-        while True:
-            try:
-                socket_ = socket.socket()
-                socket_.settimeout(self._timeout)
-                socket_.connect((ip, port))
-                break
-            except Exception:
-                sleep(1)
-        return socket_
-
     def login(self) -> Tuple[int] | Tuple[int, Any]:
         try:
-            self._login()
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket.settimeout(self._timeout)
+            self._socket.connect((self._ip, self._port))
         except Exception as e:
-            return (-1, str(e))
+            self._close()
+            raise e
         return (0,)
 
     def power_on(self) -> Tuple[int] | Tuple[int, Any]:
