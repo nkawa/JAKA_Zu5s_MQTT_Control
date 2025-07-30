@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 ## ここでUUID を使いたい
 import uuid
 
+from jaka_control.jaka_robot_mock import MockJakaRobotSharedMemoryManager
+
 from .config import SHM_NAME, SHM_SIZE
 from .jaka_zu_monitor_gui import run_joint_monitor_gui
 from .jaka_zu_control import Jaka_CON
@@ -32,6 +34,8 @@ MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "mgr")
 MQTT_CTRL_TOPIC = os.getenv("MQTT_CTRL_TOPIC", "control")
 MQTT_FORMAT = os.getenv("MQTT_FORMAT", "Jaka-Control-IK")
 MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")+"/"+ROBOT_UUID
+
+MOCK = os.getenv("MOCK", "False")
 
 
 class Jaka_MQTT:
@@ -228,6 +232,8 @@ class ProcessManager:
         self.state_monitor = False
         self.state_control = False
         self.log_queue = multiprocessing.Queue()
+        if MOCK:
+            self.mock_sm_manager = MockJakaRobotSharedMemoryManager()
 
     def startRecvMQTT(self):
         self.recv = Jaka_MQTT()

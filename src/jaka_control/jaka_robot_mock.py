@@ -1,12 +1,45 @@
 import datetime
+import json
 import logging
+import multiprocessing as mp
+import multiprocessing.shared_memory
 import threading
+import time
 import traceback
 from typing import List, Optional
 
 import numpy as np
 
 from .config import DEFAULT_JOINT
+
+
+SHM_NAME = "mock_jaka"
+SHM_SIZE = 32
+
+
+class MockJakaRobotSharedMemoryManager:
+    def __init__(self):
+        sz = SHM_SIZE * np.dtype('float32').itemsize
+        try:
+            self.sm = mp.shared_memory.SharedMemory(create=True,size = sz, name=SHM_NAME)
+        except FileExistsError:
+            self.sm = mp.shared_memory.SharedMemory(size = sz, name=SHM_NAME)
+        # self.arの要素の説明
+        # [0:6]: 関節の状態値
+        # [6:12]: 位置の状態値
+        # [12]: ロボットの電源
+        # [13]: モーターの電源
+        # [14]: スレーブモードの状態
+        self.pose = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf)
+        self.pose[:] = 0
+        self.pose[0:6] = DEFAULT_JOINT  # 初期関節値を設定
+
+    def _del_sm(self):
+        self.sm.close()
+        self.sm.unlink()
+
+    def __del__(self):
+        self._del_sm()
 
 
 class MockJakaRobot:
@@ -22,33 +55,38 @@ class MockJakaRobot:
         else:
             self.logger = logger
         self.name = name
-        self.mock_pose = [0.0] * 6
-        self.mock_joint = DEFAULT_JOINT
-        self.enabled = False
-        self.powered_on = False
-        self.in_servomove = False
+        self._init_sm()
+
+    def _init_sm(self):
+        self.sm = mp.shared_memory.SharedMemory(SHM_NAME)
+        self.pose = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf)
+
+    def _del_sm(self):
+        self.sm.close()
+        self.sm.unlink()
 
     def __del__(self):
         self.leave_servo_mode()
         self.disable()
         self.stop()
         self.logger.info("Mock Robot deleted")
+        self._del_sm()
 
     def power_on(self) -> None:
-        self.powered_on = True
+        self.pose[12] = 1
         self.logger.info("Mock: power_on called")
 
     def enable_robot(self) -> None:
-        self.enabled = True
+        self.pose[13] = 1
         self.logger.info("Mock: enable_robot called")
 
     def start(self) -> None:
         self.logger.info("Mock: start called")
-        self.powered_on = True
+        self.power_on()
 
     def enable(self) -> None:
         self.logger.info("Mock: enable called")
-        self.enabled = True
+        self.enable_robot()
 
     def move_pose_until_completion(
         self,
@@ -73,39 +111,39 @@ class MockJakaRobot:
         return True
 
     def move_pose(self, pose) -> None:
-        self.mock_pose = pose
+        self.pose[6:12] = pose
         self.logger.info(f"Mock: move_pose called with {pose}")
 
     def move_joint(self, joint) -> None:
-        self.mock_joint = joint
+        self.pose[0:6] = joint
         self.logger.info(f"Mock: move_joint called with {joint}")
 
     def get_current_pose(self) -> List[float]:
         self.logger.info("Mock: get_current_pose called")
-        return self.mock_pose
+        return self.pose[6:12].tolist()
 
     def get_current_joint(self) -> List[float]:
         self.logger.info("Mock: get_current_joint called")
-        return self.mock_joint
+        return self.pose[0:6].tolist()
 
     def enter_servo_mode(self) -> None:
-        self.in_servomove = True
+        self.pose[14] = 1
         self.logger.info("Mock: enter_servo_mode called")
 
     def move_joint_servo(self, pose) -> None:
-        self.mock_joint = (np.array(self.mock_joint) + np.array(pose)).tolist()
+        self.pose[0:6] = (np.array(self.pose[0:6]) + np.array(pose)).tolist()
         self.logger.info(f"Mock: move_joint_servo called with {pose}")
 
     def leave_servo_mode(self) -> None:
-        self.in_servomove = False
+        self.pose[14] = 0
         self.logger.info("Mock: leave_servo_mode called")
 
     def disable(self) -> None:
-        self.enabled = False
+        self.pose[13] = 0
         self.logger.info("Mock: disable called")
 
     def stop(self) -> None:
-        self.powered_on = False
+        self.pose[12] = 0
         self.logger.info("Mock: stop called")
 
     def clear_error(self) -> None:
@@ -113,16 +151,16 @@ class MockJakaRobot:
 
     def is_powered_on(self) -> bool:
         self.logger.info("Mock: is_powered_on called")
-        return self.powered_on
+        return bool(self.pose[12] == 1)
 
     def is_enabled(self) -> bool:
         self.logger.info("Mock: is_enabled called")
-        return self.enabled
+        return bool(self.pose[13] == 1) 
 
     def is_in_servomove(self) -> bool:
         self.logger.info("Mock: is_in_servomove called")
-        return self.in_servomove
-    
+        return bool(self.pose[14] == 1)
+
     def format_error(self, e: Exception) -> str:
         s = "\n"
         s = s + "Error trace: " + traceback.format_exc() + "\n"
@@ -188,35 +226,60 @@ class MockJakaRobotFeedback:
                     "_feed.jsonl"
             self.save_feed_fd = open(save_feed_path, "w")
         self.__Lock = threading.Lock()
+        self._init_sm()
 
-        self.mock_pose = [0.0] * 6
-        self.mock_joint = DEFAULT_JOINT
-        self.mock_feed = {
-            "errcode": 0,
-            "errmsg": "",
-            "powered_on": True,
-            "enabled": True,
-            "paused": False,
-            "on_soft_limit": False,
-            "emergency_stop": False,
-            "protective_stop": False,
-            "actual_position": self.mock_pose,
-            "joint_actual_position": self.mock_joint,
-            "torqsensor": [[0]*6, [0]*6, [0]*6],
-        }
+    def _init_sm(self):
+        self.sm = mp.shared_memory.SharedMemory(SHM_NAME)
+        self.pose = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf)
+
+    def _del_sm(self):
+        self.sm.close()
+        self.sm.unlink()
 
     def __del__(self):
         if self.save_feed_fd is not None:
             self.save_feed_fd.close()
             self.save_feed_fd = None
 
+    def recvFeedData(self):
+        while True:
+            # Simulate data receiving interval
+            time.sleep(0.03)
+            feed_data = {
+                "errcode": 0,
+                "errmsg": "",
+                "powered_on": bool(self.pose[12] == 1),
+                "enabled": bool(self.pose[13] == 1),
+                "paused": False,
+                "on_soft_limit": False,
+                "emergency_stop": False,
+                "protective_stop": False,
+                "actual_position": self.pose[6:12].tolist(),
+                "joint_actual_position": self.pose[0:6].tolist(),
+                "torqsensor": [[0]*6, [0]*6, [0]*6],
+            }
+            feed_data["timestamp"] = time.perf_counter()
+            self._on_feed(feed_data)
+
     def start(self):
         self.logger.info("Mock: start called")
-        self.latest_feed = self.mock_feed
+        self.latest_feed = {}
+        feed_thread = threading.Thread(target=self.recvFeedData)
+        feed_thread.daemon = True
+        feed_thread.start()
 
     def _on_feed(self, data):
+        if self.save_feed_fd is not None:
+            self.save_feed_fd.write(json.dumps(data) + "\n")
+        with self.__Lock:
+            self.latest_feed = data
+        errcode = data["errcode"]
+        is_error = str(errcode) != "0"
+        if is_error:
+            error_related_feedback = self._get_error_related_feedback(data)
+            self.logger.error(
+                f"Error in feedback: {error_related_feedback}")
         self.logger.info(f"Mock: _on_feed called with {data}")
-        self.latest_feed = data
 
     def _get_error_related_feedback(self, data):
         error_related_feedback = {
