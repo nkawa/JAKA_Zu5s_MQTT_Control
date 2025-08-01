@@ -68,8 +68,7 @@ class Jaka_MQTT:
             self.client.subscribe(MQTT_MANAGE_RCV_TOPIC)
             self.logger.info("subscribe to: " + MQTT_MANAGE_RCV_TOPIC)
         else:
-            self.logger.info("MQTT:Connected with result code " + str(rc),
-                             "subscribe ctrl", MQTT_CTRL_TOPIC)
+            self.logger.info("subscribe to: " + MQTT_CTRL_TOPIC)
             self.mqtt_ctrl_topic = MQTT_CTRL_TOPIC
             self.client.subscribe(self.mqtt_ctrl_topic)
 

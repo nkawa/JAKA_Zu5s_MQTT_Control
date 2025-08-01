@@ -206,10 +206,7 @@ class Jaka_CON:
             #     continue
 
             # 関節の状態値
-            if MOCK:
-                state = self.robot.get_current_joint()
-            else:
-                state = self.pose[:6].copy()
+            state = self.pose[:6].copy()
 
             # 目標値
             target = self.pose[6:12].copy()

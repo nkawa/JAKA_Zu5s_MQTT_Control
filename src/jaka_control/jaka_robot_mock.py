@@ -132,7 +132,8 @@ class MockJakaRobot:
 
     def move_joint_servo(self, pose) -> None:
         self.pose[0:6] = (np.array(self.pose[0:6]) + np.array(pose)).tolist()
-        self.logger.info(f"Mock: move_joint_servo called with {pose}")
+        # Stop logging because often called too frequently
+        # self.logger.info(f"Mock: move_joint_servo called with {pose}")
 
     def leave_servo_mode(self) -> None:
         self.pose[14] = 0
@@ -267,6 +268,12 @@ class MockJakaRobotFeedback:
         feed_thread = threading.Thread(target=self.recvFeedData)
         feed_thread.daemon = True
         feed_thread.start()
+        # 最初のフィードが来るまで待つ
+        while True:
+            with self.__Lock:
+                if not self.latest_feed:
+                    return
+            time.sleep(0.008)
 
     def _on_feed(self, data):
         if self.save_feed_fd is not None:
@@ -279,7 +286,6 @@ class MockJakaRobotFeedback:
             error_related_feedback = self._get_error_related_feedback(data)
             self.logger.error(
                 f"Error in feedback: {error_related_feedback}")
-        self.logger.info(f"Mock: _on_feed called with {data}")
 
     def _get_error_related_feedback(self, data):
         error_related_feedback = {
