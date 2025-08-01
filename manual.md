@@ -86,8 +86,8 @@ MQTTでの制御中に、エラーが起きた場合は、自動復帰可能な�
 ```sh
 MQTT_MODE='metawork'
 MQTT_SERVER='sora2.uclab.jp'
-ROBOT_UUID='jaka-zu-real'  # VR側のコードと対応させること
-ROBOT_MODEL='jaka-zu-real'  # VR側のコードと対応させること
+ROBOT_UUID='JAKA-control'  # 現状はROBOT_MODELと一致させているが別にそうでなくても良い
+ROBOT_MODEL='JAKA-control'  # VR側のコードと対応させること
 MQTT_MANAGE_TOPIC='mgr'
 MQTT_CTRL_TOPIC='control'
 MQTT_ROBOT_STATE_TOPIC='robot'
@@ -99,3 +99,5 @@ MOCK='false'  # `true`でロボットに接続せずテストモックを用い�
 ```
 
 **NOTE(2025/07/30): 現時点ではVR側のコードとの結合した動作確認をしていない。まず、`MOCK='true', MOVE='true'`で、テストモックを用いて一連の動作が実行できるか確認するのを推奨する。次に、`MOCK='false', MOVE='false'`で、ロボットに接続するが制御値は送信せずに確認するのを推奨する。最後に、`MOCK='false', MOVE='true'で確認するのを推奨する。テストモックは、関節角度の制御値が状態値に直ちに反映されるが、TCP位置やエラー状態は正しくない可能性がある。**
+
+**NOTE(2025/08/01): MetaworkMQTTプロトコルを使用しない場合、`MQTT_MODE='other', MQTT_CTRL_TOPIC='control/<VRゴーグルのdeviceID>'`とすれば、VRゴーグルからの制御値をロボットは受け取ることができる。**
