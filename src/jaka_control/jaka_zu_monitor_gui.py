@@ -9,7 +9,7 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from .config import (
-    ABS_JOINT_LIMIT,
+    N_JOINTS,
     SHM_NAME,
     SHM_SIZE,
     T_INTV,
@@ -23,7 +23,7 @@ class JointMonitorPlot(QtWidgets.QWidget):
     ):
         """関節角度の時系列データのプロット。"""
         super().__init__()
-        self.n_joints = len(ABS_JOINT_LIMIT)
+        self.n_joints = N_JOINTS
         self.max_points = max_points
         self.t_intv = T_INTV
         self.t_start = time.time()

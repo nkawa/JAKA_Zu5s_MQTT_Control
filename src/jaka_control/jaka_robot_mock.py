@@ -274,7 +274,7 @@ class MockJakaRobotFeedback:
         with self.__Lock:
             self.latest_feed = data
         errcode = data["errcode"]
-        is_error = str(errcode) != "0"
+        is_error = str(errcode) not in ["0", "0x0"]
         if is_error:
             error_related_feedback = self._get_error_related_feedback(data)
             self.logger.error(
@@ -332,7 +332,7 @@ class MockJakaRobotFeedback:
         with self.__Lock:
             data = self.latest_feed
             errcode = data["errcode"]
-            is_error = str(errcode) != "0"
+            is_error = str(errcode) not in ["0", "0x0"]
             if is_error:
                 error_related_feedback = self._get_error_related_feedback(data)
                 return [error_related_feedback]

@@ -19,7 +19,9 @@ from pyDHgripper import AG95
 
 from .jaka_robot import JakaRobot
 from .jaka_robot_mock import MockJakaRobot
-from .config import DEFAULT_JOINT, SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
+from .config import (
+    DEFAULT_JOINT, MIN_JOINT_LIMIT, MAX_JOINT_LIMIT, SHM_NAME, SHM_SIZE, T_INTV
+)
 from .filter import SMAFilter
 from .interpolate import DelayedInterpolator
 from .tools import tool_infos, tool_classes, tool_base
@@ -70,8 +72,8 @@ t_intv = T_INTV
 n_windows *= int(0.008 / t_intv)
 reset_default_state = True
 default_joint = DEFAULT_JOINT
-min_joint_limit = [-360, -85, -175, -85, -360, -360]
-max_joint_limit = [360, 265, 175, 265, 360, 360]
+min_joint_limit = MIN_JOINT_LIMIT
+max_joint_limit = MAX_JOINT_LIMIT
 min_joint_limit = np.array(min_joint_limit)
 max_joint_limit = np.array(max_joint_limit)
 min_joint_soft_limit = min_joint_limit + 10

@@ -58,6 +58,7 @@ class Jaka_MON:
         self.robot = robot(
             ip_feed=ROBOT_IP,
             logger=self.robot_logger,
+            save_feed=SAVE,
         )
         self.robot.start()
         tool_id = int(os.environ["TOOL_ID"])
