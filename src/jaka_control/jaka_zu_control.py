@@ -480,15 +480,24 @@ class Jaka_CON:
                     # JAKAでは無視できるエラーがあるか現状不明なためすべてraiseする
                     raise e
 
-                if self.pose[13] == 1:
-                    th1 = threading.Thread(target=self.send_grip)
-                    th1.start()
-                    self.pose[13] = 0
+                tool = self.pose[13]
+                if tool != 0:
+                    tool -= 100
+                    tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
+                    tool_corrected = \
+                        max(min(int(round(tool_corrected)), 1000), 0)
+                    th = threading.Thread(
+                        target=self.send_tool, args=(tool_corrected,))
+                    th.start()
+                # if self.pose[13] == 1:
+                #     th1 = threading.Thread(target=self.send_grip)
+                #     th1.start()
+                #     self.pose[13] = 0
 
-                if self.pose[13] == 2:
-                    th2 = threading.Thread(target=self.send_release)
-                    th2.start()
-                    self.pose[13] = 0
+                # if self.pose[13] == 2:
+                #     th2 = threading.Thread(target=self.send_release)
+                #     th2.start()
+                #     self.pose[13] = 0
 
             t_elapsed = time.time() - now
             t_wait = t_intv - t_elapsed
@@ -522,6 +531,31 @@ class Jaka_CON:
             self.gripper.set_pos(1000)
         except Exception:
             self.logger.exception("Error releasing hand")
+
+    def send_tool(self, tool_corrected: int) -> None:
+        """
+        TODO: こういうエラーがよくでるが一旦無視しても大丈夫
+        [2025-08-04 17:39:06.321020][CTRL][ERROR] Error setting tool position
+        Traceback (most recent call last):
+        File "/home/user/JAKA_Zu5s_MQTT_Control/src/jaka_control/jaka_zu_control.py", line 536, in send_tool
+            self.gripper.set_pos(tool_corrected)
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 221, in set_pos
+            self.write_uart(modbus_high_addr=0x01,
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 164, in write_uart
+            udata = self.read_uart()
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 103, in read_uart
+            udata = self.ser.read_all()
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/serial/serialutil.py", line 652, in read_all
+            return self.read(self.in_waiting)
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/serial/serialposix.py", line 595, in read
+            raise SerialException(
+        serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+        """
+        try:
+            self.gripper.set_pos(tool_corrected)
+        except Exception:
+            pass
+            # self.logger.exception("Error setting tool position")
 
     def enable(self) -> None:
         try:

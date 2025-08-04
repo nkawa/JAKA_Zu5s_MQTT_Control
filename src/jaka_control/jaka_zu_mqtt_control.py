@@ -92,17 +92,22 @@ class Jaka_MQTT:
                 raise ValueError
             self.pose[6:12] = joint_q 
 
-            if "grip" in js:
-                if js['grip']:
-                    if not self.gripState:
-                        self.gripState = True
-                        self.pose[13] = 1
+            # if "grip" in js:
+            #     if js['grip']:
+            #         if not self.gripState:
+            #             self.gripState = True
+            #             self.pose[13] = 1
 
-                else:
-                    if self.gripState:
-                        self.gripState = False
-                        self.pose[13] = 2
-            
+            #     else:
+            #         if self.gripState:
+            #             self.gripState = False
+            #             self.pose[13] = 2
+
+            if "tool" in js:
+                if js['tool']:
+                    # HACK: 0の場合に対応するため暫定的に+100している
+                    self.pose[13] = js['tool'] + 100
+
             if "tool_change" in js:
                 if self.pose[17] == 0:
                     tool = js["tool_change"]
