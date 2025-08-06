@@ -1,3 +1,4 @@
+import random
 import time
 from pyDHgripper import AG95
 from multiprocessing import Process, Value, Manager
@@ -5,6 +6,7 @@ import ctypes
 import argparse
 import tkinter as tk
 import threading
+import traceback
 
 
 def theta_updater(theta_tool):
@@ -26,6 +28,7 @@ def theta_updater(theta_tool):
 def gripper_setter(theta_tool, interval, time_dict):
     gripper = AG95(port='/dev/ttyUSB0')
     stop_event = threading.Event()
+    error_flag = threading.Event()
 
     def worker():
         while not stop_event.is_set():
@@ -36,10 +39,18 @@ def gripper_setter(theta_tool, interval, time_dict):
             t0 = time.perf_counter()
             try:
                 gripper.set_pos(tool_corrected)
+                t1 = time.perf_counter()
+                random_value = random.randint(0, 100)
+                time_dict['random_value'] = random_value
+                if random_value == 1:
+                    raise Exception("Simulated random error for testing.")
+                time_dict['set_pos'] = t1 - t0
             except Exception as e:
-                print(f"[ERROR][set_pos] {e}")
-            t1 = time.perf_counter()
-            time_dict['set_pos'] = t1 - t0
+                err_str = f"[ERROR][set_pos] {e}\n" + traceback.format_exc()
+                time_dict['set_pos'] = 0.0
+                print(err_str)
+                error_flag.set()
+                break
 
             t2 = time.perf_counter()
             try:
@@ -48,19 +59,35 @@ def gripper_setter(theta_tool, interval, time_dict):
                 time_dict['read_pos'] = t3 - t2
                 time_dict['read_pos_value'] = read_pos
             except Exception as e:
+                err_str = f"[ERROR][read_pos] {e}\n" + traceback.format_exc()
                 time_dict['read_pos'] = 0.0
                 time_dict['read_pos_value'] = None
-                print(f"[ERROR][read_pos] {e}")
+                print(err_str)
+                error_flag.set()
+                break
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
 
     while True:
+        if error_flag.is_set():
+            print("[ERROR] Worker thread error detected. Exiting gripper_setter.")
+            raise Exception("Worker thread error detected.")
         loop_start = time.perf_counter()
         time.sleep(interval)
         loop_end = time.perf_counter()
         time_dict['main_loop'] = loop_end - loop_start
 
+
+def gripper_setter_loop(theta_tool, interval, time_dict):
+    while True:
+        try:
+            gripper_setter(theta_tool, interval, time_dict)
+        except Exception as e:
+            err_str = f"[ERROR][gripper_setter_loop] {e}\n" + traceback.format_exc()
+            print(err_str)
+            time_dict['last_error'] = err_str
+            time.sleep(1)
 
 def gui_loop(time_dict):
     root = tk.Tk()
@@ -77,16 +104,26 @@ def gui_loop(time_dict):
     tk.Label(root, text='read_pos value').pack()
     read_pos_value_box = tk.Entry(root, width=20)
     read_pos_value_box.pack()
+    tk.Label(root, text='random_value').pack()
+    random_value_box = tk.Entry(root, width=20)
+    random_value_box.pack()
+    tk.Label(root, text='last error').pack()
+    last_error_box = tk.Text(root, width=60, height=6)
+    last_error_box.pack()
     set_pos_box.insert(0, '0.0')
     read_pos_box.insert(0, '0.0')
     main_loop_box.insert(0, '0.0')
     read_pos_value_box.insert(0, 'None')
+    random_value_box.insert(0, 'None')
+    last_error_box.insert('1.0', '')
 
     def update_boxes():
         set_time = time_dict.get('set_pos', 0.0)
         read_time = time_dict.get('read_pos', 0.0)
         main_loop_time = time_dict.get('main_loop', 0.0)
         read_pos_value = time_dict.get('read_pos_value', None)
+        random_value = time_dict.get('random_value', None)
+        last_error = time_dict.get('last_error', '')
         set_pos_box.delete(0, tk.END)
         set_pos_box.insert(0, f'{set_time:.6f}')
         read_pos_box.delete(0, tk.END)
@@ -95,6 +132,10 @@ def gui_loop(time_dict):
         main_loop_box.insert(0, f'{main_loop_time:.6f}')
         read_pos_value_box.delete(0, tk.END)
         read_pos_value_box.insert(0, str(read_pos_value))
+        random_value_box.delete(0, tk.END)
+        random_value_box.insert(0, str(random_value))
+        last_error_box.delete('1.0', tk.END)
+        last_error_box.insert('1.0', last_error)
         root.after(50, update_boxes)  # 20Hz更新
 
     update_boxes()
@@ -109,7 +150,7 @@ if __name__ == '__main__':
     manager = Manager()
     time_dict = manager.dict()
     p1 = Process(target=theta_updater, args=(theta_tool,))
-    p2 = Process(target=gripper_setter, args=(theta_tool, args.interval, time_dict))
+    p2 = Process(target=gripper_setter_loop, args=(theta_tool, args.interval, time_dict))
     p1.start()
     p2.start()
     try:
