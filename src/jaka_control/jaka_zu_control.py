@@ -1,6 +1,7 @@
 # Jakaを制御する
 
 import logging
+import traceback
 from typing import Any, Dict, List, Literal, Tuple
 import datetime
 import time
@@ -161,6 +162,46 @@ class Jaka_CON:
             else:
                 self.logger.info("Process real-time priority set to: %u" % rt_app_priority)
 
+    def format_error(self, e: Exception) -> str:
+        s = "\n"
+        s = s + "Error trace: " + traceback.format_exc() + "\n"
+        return s
+
+    def hand_control_loop(self, stop_event, error_event, lock, error_info):
+        while True:
+            if stop_event.is_set():
+                break
+            # 現在情報を取得しているかを確認
+            if self.pose[19] != 1:
+                time.sleep(t_intv)
+                continue
+            # 目標値を取得しているかを確認
+            if self.pose[20] != 1:
+                time.sleep(t_intv)
+                continue
+            # ツールの値を取得
+            # 値0が意味を持つので共有メモリではオフセットをかけている
+            tool = int(self.pose[13])
+            if tool == 0:
+                continue
+            tool -= 100
+            tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
+            tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
+            try:
+                # 同期処理で、0.08秒程度かかる
+                # 制御周期が明確でないデバイスは、処理が終わった段階で次の処理を行う
+                # ようにすれば最瀕で制御できると考えてこの設計にしている
+                self.gripper.set_pos(tool_corrected)
+                # 同様
+                # read_pos = self.gripper.read_pos()
+            except Exception as e:
+                with lock:
+                    error_info['kind'] = "hand"
+                    error_info['msg'] = self.format_error(e)
+                    error_info['exception'] = e
+                error_event.set()
+                break
+
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
         self.last = 0
@@ -168,8 +209,22 @@ class Jaka_CON:
         self.pose[19] = 0
         self.pose[20] = 0
         target_stop = None
+        stop_event = threading.Event()
+        error_event = threading.Event()
+        lock = threading.Lock()
+        error_info = {}
+
+        hand_thread = threading.Thread(
+            target=self.hand_control_loop,
+            args=(stop_event, error_event, lock, error_info)
+        )
+        hand_thread.start()
+
         while True:
             now = time.time()
+
+            if not hand_thread.is_alive():
+                break
 
             # NOTE: テスト用データなど、時間が経つにつれて
             # targetの値がstateの値によらずにどんどん
@@ -180,6 +235,8 @@ class Jaka_CON:
             # ガッとロボットが動いてしまう。実際のシステムでは
             # targetはstateに依存するのでまた別に考える
             stop = self.pose[16]
+            if stop:
+                stop_event.set()
 
             # 現在情報を取得しているかを確認
             if self.pose[19] != 1:
@@ -187,7 +244,7 @@ class Jaka_CON:
                 # self.logger.info("Wait for monitoring")
                 # 取得する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 continue
 
             # 目標値を取得しているかを確認
@@ -196,7 +253,7 @@ class Jaka_CON:
                 # self.logger.info("Wait for target")
                 # 取得する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 continue
 
             # NOTE: 最初にVR側でロボットの状態値を取得できていれば追加してもよいかも
@@ -244,7 +301,7 @@ class Jaka_CON:
                 self.logger.info("Start sending control command")
                 # 制御する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 self.last = now
 
                 # 目標値を遅延を許して極力線形補間するためのセットアップ
@@ -477,27 +534,13 @@ class Jaka_CON:
                 try:
                     self.robot.move_joint_servo(target_diff_speed_limited.tolist())
                 except Exception as e:
-                    # JAKAでは無視できるエラーがあるか現状不明なためすべてraiseする
-                    raise e
-
-                tool = self.pose[13]
-                if tool != 0:
-                    tool -= 100
-                    tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
-                    tool_corrected = \
-                        max(min(int(round(tool_corrected)), 1000), 0)
-                    th = threading.Thread(
-                        target=self.send_tool, args=(tool_corrected,))
-                    th.start()
-                # if self.pose[13] == 1:
-                #     th1 = threading.Thread(target=self.send_grip)
-                #     th1.start()
-                #     self.pose[13] = 0
-
-                # if self.pose[13] == 2:
-                #     th2 = threading.Thread(target=self.send_release)
-                #     th2.start()
-                #     self.pose[13] = 0
+                    # JAKAでは無視できるエラーがあるか現状不明なためすべて上位に任せる
+                    error_info['kind'] = "robot"
+                    error_info['msg'] = self.robot.format_error(e)
+                    error_info['exception'] = e
+                    error_event.set()
+                    stop_event.set()
+                    break
 
             t_elapsed = time.time() - now
             t_wait = t_intv - t_elapsed
@@ -515,10 +558,16 @@ class Jaka_CON:
                 # スレーブモードでは十分低速時に2回同じ位置のコマンドを送ると
                 # ロボットを停止させてスレーブモードを解除可能な状態になる
                 if (control == self.last_control).all():
-                    return True
+                    break
                 
             self.last_control = control
             self.last = now
+        
+        hand_thread.join()
+        if error_event.is_set():
+            # TODO: これで例外発生元のスタックトレースが取得できればこれで十分
+            raise error_info['exception']
+        return True
 
     def send_grip(self) -> None:
         try:
