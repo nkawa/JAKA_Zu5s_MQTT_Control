@@ -29,12 +29,14 @@ def gripper_setter(theta_tool, interval, time_dict):
             tool_corrected = int(theta_tool.value)
         tool_corrected = (tool_corrected - (-1)) / (89 - (-1)) * (1000 - 0)
         tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
+        # 0.08s程度, blocking
         t0 = time.perf_counter()
         gripper.set_pos(tool_corrected)
         t1 = time.perf_counter()
         tool_read = None
         t2 = None
         try:
+            # 0.08s程度, blocking
             t2 = time.perf_counter()
             tool_read = gripper.read_pos()
             t3 = time.perf_counter()
