@@ -25,70 +25,93 @@ def theta_updater(theta_tool):
         time.sleep(0.0165)  # 16.5ms
 
 
-def gripper_setter(theta_tool, interval, time_dict):
+def gripper_setter(theta_tool, interval, time_dict, simulate_error=False):
     gripper = AG95(port='/dev/ttyUSB0')
     stop_event = threading.Event()
     error_flag = threading.Event()
-    simulate_error = False
+    error_info = {}
 
     def worker():
-        while not stop_event.is_set():
-            with theta_tool.get_lock():
-                tool_corrected = int(theta_tool.value)
-            tool_corrected = (tool_corrected - (-1)) / (89 - (-1)) * (1000 - 0)
-            tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
-            t0 = time.perf_counter()
-            try:
-                gripper.set_pos(tool_corrected)
-                t1 = time.perf_counter()
-                random_value = random.randint(0, 100) if simulate_error else 0
-                time_dict['random_value'] = random_value
-                if random_value == 1:
-                    raise Exception("Simulated random error for testing inside worker.")
-                time_dict['set_pos'] = t1 - t0
-            except Exception as e:
-                err_str = f"[ERROR][set_pos] {e}\n" + traceback.format_exc()
-                time_dict['set_pos'] = 0.0
-                print(err_str)
-                error_flag.set()
-                break
+        try:
+            while not stop_event.is_set():
+                with theta_tool.get_lock():
+                    tool_corrected = int(theta_tool.value)
+                tool_corrected = (tool_corrected - (-1)) / (89 - (-1)) * (1000 - 0)
+                tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
+                t0 = time.perf_counter()
+                try:
+                    gripper.set_pos(tool_corrected)
+                    t1 = time.perf_counter()
+                    random_value = random.randint(0, 1000) if simulate_error else 0
+                    time_dict['random_value'] = random_value
+                    if random_value == 1:
+                        raise Exception("Simulated random error for testing inside worker.")
+                    time_dict['set_pos'] = t1 - t0
+                except Exception as e:
+                    err_str = f"[ERROR][set_pos] {e}\n" + traceback.format_exc()
+                    time_dict['set_pos'] = 0.0
+                    print(err_str)
+                    error_info['msg'] = err_str
+                    error_flag.set()
+                    stop_event.set()
+                    break
 
-            t2 = time.perf_counter()
+                t2 = time.perf_counter()
+                try:
+                    read_pos = gripper.read_pos()
+                    t3 = time.perf_counter()
+                    time_dict['read_pos'] = t3 - t2
+                    time_dict['read_pos_value'] = read_pos
+                except Exception as e:
+                    err_str = f"[ERROR][read_pos] {e}\n" + traceback.format_exc()
+                    time_dict['read_pos'] = 0.0
+                    time_dict['read_pos_value'] = None
+                    print(err_str)
+                    error_info['msg'] = err_str
+                    error_flag.set()
+                    stop_event.set()
+                    break
+        finally:
             try:
-                read_pos = gripper.read_pos()
-                t3 = time.perf_counter()
-                time_dict['read_pos'] = t3 - t2
-                time_dict['read_pos_value'] = read_pos
-            except Exception as e:
-                err_str = f"[ERROR][read_pos] {e}\n" + traceback.format_exc()
-                time_dict['read_pos'] = 0.0
-                time_dict['read_pos_value'] = None
-                print(err_str)
-                error_flag.set()
-                break
+                # gripper.close()
+                pass
+            except Exception:
+                pass
 
-    thread = threading.Thread(target=worker, daemon=True)
+    thread = threading.Thread(target=worker)
     thread.start()
 
-    while True:
+    try:
+        while thread.is_alive():
+            if error_flag.is_set():
+                stop_event.set()
+                break
+            loop_start = time.perf_counter()
+            random_value_main = random.randint(0, 1000) if simulate_error else 0
+            time_dict['random_value_main'] = random_value_main
+            if random_value_main == 1:
+                stop_event.set()
+                error_info['msg'] = "Simulated random error for testing in main loop."
+                error_flag.set()
+                break
+            time.sleep(interval)
+            loop_end = time.perf_counter()
+            time_dict['main_loop'] = loop_end - loop_start
+        thread.join()
         if error_flag.is_set():
-            print("[ERROR] Worker thread error detected. Exiting gripper_setter.")
-            raise Exception("Worker thread error detected.")
-        loop_start = time.perf_counter()
-        random_value_main = random.randint(0, 100) if simulate_error else 0
-        time_dict['random_value_main'] = random_value_main
-        if random_value_main == 1:
-            stop_event.set()
-            raise Exception("Simulated random error for testing in main loop.")
-        time.sleep(interval)
-        loop_end = time.perf_counter()
-        time_dict['main_loop'] = loop_end - loop_start
+            raise Exception(error_info.get('msg', 'Worker thread error'))
+    finally:
+        try:
+            # gripper.close()
+            pass
+        except Exception:
+            pass
 
 
-def gripper_setter_loop(theta_tool, interval, time_dict):
+def gripper_setter_loop(theta_tool, interval, time_dict, simulate_error=False):
     while True:
         try:
-            gripper_setter(theta_tool, interval, time_dict)
+            gripper_setter(theta_tool, interval, time_dict, simulate_error)
         except Exception as e:
             err_str = f"[ERROR][gripper_setter_loop] {e}\n" + traceback.format_exc()
             print(err_str)
@@ -159,12 +182,13 @@ def gui_loop(time_dict):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--interval', type=float, default=0.008, help='gripper_setter送信間隔[秒]')
+    parser.add_argument('--simulate-error', action='store_true', help='エラー発生をシミュレートする')
     args = parser.parse_args()
     theta_tool = Value(ctypes.c_double, 89)
     manager = Manager()
     time_dict = manager.dict()
     p1 = Process(target=theta_updater, args=(theta_tool,))
-    p2 = Process(target=gripper_setter_loop, args=(theta_tool, args.interval, time_dict))
+    p2 = Process(target=gripper_setter_loop, args=(theta_tool, args.interval, time_dict, args.simulate_error))
     p1.start()
     p2.start()
     try:
