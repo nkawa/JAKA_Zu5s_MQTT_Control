@@ -559,6 +559,7 @@ class Jaka_CON:
 
     def enable(self) -> None:
         try:
+            self.logger.info("Enabling robot")
             self.robot.enable()
         except Exception as e:
             self.logger.error("Error enabling robot")
@@ -566,6 +567,7 @@ class Jaka_CON:
 
     def disable(self) -> None:
         try:
+            self.logger.info("Disabling robot")
             self.robot.disable()
         except Exception as e:
             self.logger.error("Error disabling robot")
@@ -573,6 +575,7 @@ class Jaka_CON:
 
     def default_pose(self) -> None:
         try:
+            self.logger.info("Moving to default pose")
             self.robot.move_joint_until_completion(self.default_joint)
         except Exception as e:
             self.logger.error("Error moving to default pose")
@@ -580,6 +583,7 @@ class Jaka_CON:
 
     def tidy_pose(self) -> None:
         try:
+            self.logger.info("Moving to tidy pose")
             self.robot.move_joint_until_completion(self.tidy_joint)
         except Exception as e:
             self.logger.error("Error moving to tidy pose")
@@ -587,6 +591,7 @@ class Jaka_CON:
 
     def clear_error(self) -> None:
         try:
+            self.logger.info("Clearing robot error")
             self.robot.clear_error()
         except Exception as e:
             self.logger.error("Error clearing robot error")
