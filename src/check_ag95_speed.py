@@ -43,7 +43,7 @@ def gripper_setter(theta_tool, interval, time_dict):
                 random_value = random.randint(0, 100)
                 time_dict['random_value'] = random_value
                 if random_value == 1:
-                    raise Exception("Simulated random error for testing.")
+                    raise Exception("Simulated random error for testing inside worker.")
                 time_dict['set_pos'] = t1 - t0
             except Exception as e:
                 err_str = f"[ERROR][set_pos] {e}\n" + traceback.format_exc()
@@ -74,6 +74,10 @@ def gripper_setter(theta_tool, interval, time_dict):
             print("[ERROR] Worker thread error detected. Exiting gripper_setter.")
             raise Exception("Worker thread error detected.")
         loop_start = time.perf_counter()
+        random_value_main = random.randint(0, 100)
+        time_dict['random_value_main'] = random_value_main
+        if random_value_main == 1:
+            raise Exception("Simulated random error for testing in main loop.")
         time.sleep(interval)
         loop_end = time.perf_counter()
         time_dict['main_loop'] = loop_end - loop_start
@@ -88,6 +92,7 @@ def gripper_setter_loop(theta_tool, interval, time_dict):
             print(err_str)
             time_dict['last_error'] = err_str
             time.sleep(1)
+
 
 def gui_loop(time_dict):
     root = tk.Tk()
@@ -107,6 +112,9 @@ def gui_loop(time_dict):
     tk.Label(root, text='random_value').pack()
     random_value_box = tk.Entry(root, width=20)
     random_value_box.pack()
+    tk.Label(root, text='random_value_main').pack()
+    random_value_main_box = tk.Entry(root, width=20)
+    random_value_main_box.pack()
     tk.Label(root, text='last error').pack()
     last_error_box = tk.Text(root, width=60, height=6)
     last_error_box.pack()
@@ -115,6 +123,7 @@ def gui_loop(time_dict):
     main_loop_box.insert(0, '0.0')
     read_pos_value_box.insert(0, 'None')
     random_value_box.insert(0, 'None')
+    random_value_main_box.insert(0, 'None')
     last_error_box.insert('1.0', '')
 
     def update_boxes():
@@ -123,6 +132,7 @@ def gui_loop(time_dict):
         main_loop_time = time_dict.get('main_loop', 0.0)
         read_pos_value = time_dict.get('read_pos_value', None)
         random_value = time_dict.get('random_value', None)
+        random_value_main = time_dict.get('random_value_main', None)
         last_error = time_dict.get('last_error', '')
         set_pos_box.delete(0, tk.END)
         set_pos_box.insert(0, f'{set_time:.6f}')
@@ -134,6 +144,8 @@ def gui_loop(time_dict):
         read_pos_value_box.insert(0, str(read_pos_value))
         random_value_box.delete(0, tk.END)
         random_value_box.insert(0, str(random_value))
+        random_value_main_box.delete(0, tk.END)
+        random_value_main_box.insert(0, str(random_value_main))
         last_error_box.delete('1.0', tk.END)
         last_error_box.insert('1.0', last_error)
         root.after(50, update_boxes)  # 20Hz更新
