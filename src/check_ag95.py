@@ -43,6 +43,7 @@ if __name__ == '__main__':
     # Velocity low
     # 速度を設定するだけでは何も起こらない
     # 遅い速度を設定しても、グリッパーの動作が変わらないように見える
+    # ドキュメントと動作確認の結果、力のみ速度に影響する
     print(f"{gripper.set_vel(1)=}")
     time.sleep(1)
     # Grip
@@ -55,35 +56,39 @@ if __name__ == '__main__':
         print(f"{gripper.set_pos(1000)=}")
         time.sleep(1)
 
-    # # Velocity high
-    # print(f"{gripper.set_vel(500)=}")
-    # time.sleep(1)
-    # # Grip
-    # if check_move:
-    #     print(f"{gripper.set_pos(0)=}")
-    #     time.sleep(1)
-    # print(f"{gripper.read_pos()=}")
-    # # Release
-    # if check_move:
-    #     print(f"{gripper.set_pos(1000)=}")
-    #     time.sleep(1)
+    # Velocity high
+    print(f"{gripper.set_vel(500)=}")
+    time.sleep(1)
+    # Grip
+    if check_move:
+        print(f"{gripper.set_pos(0)=}")
+        time.sleep(1)
+    print(f"{gripper.read_pos()=}")
+    # Release
+    if check_move:
+        print(f"{gripper.set_pos(1000)=}")
+        time.sleep(1)
 
     # Force low
     print(f"{gripper.set_force(20)=}")
     time.sleep(1)
-    # # Grip
-    # if check_move:
-    #     print(f"{gripper.set_pos(0)=}")
-    # print(f"{gripper.read_pos()=}")
-    # # Release
-    # if check_move:
-    #     print(f"{gripper.set_pos(1000)=}")
+    # Grip
+    if check_move:
+        print(f"{gripper.set_pos(0)=}")
+        time.sleep(1)
+    print(f"{gripper.read_pos()=}")
+    # Release
+    if check_move:
+        print(f"{gripper.set_pos(1000)=}")
+        time.sleep(1)
 
-    # print(f"{gripper.set_force(100)=}")
-    # # # Grip
-    # # if check_move:
-    # #     print(f"{gripper.set_pos(0)=}")
-    # # print(f"{gripper.read_pos()=}")
-    # # # Release
-    # # if check_move:
-    # #     print(f"{gripper.set_pos(1000)=}")
+    print(f"{gripper.set_force(100)=}")
+    # Grip
+    if check_move:
+        print(f"{gripper.set_pos(0)=}")
+        time.sleep(1)
+    print(f"{gripper.read_pos()=}")
+    # Release
+    if check_move:
+        print(f"{gripper.set_pos(1000)=}")
+        time.sleep(1)
