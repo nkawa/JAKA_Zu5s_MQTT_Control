@@ -29,6 +29,7 @@ def gripper_setter(theta_tool, interval, time_dict):
     gripper = AG95(port='/dev/ttyUSB0')
     stop_event = threading.Event()
     error_flag = threading.Event()
+    simulate_error = False
 
     def worker():
         while not stop_event.is_set():
@@ -40,7 +41,7 @@ def gripper_setter(theta_tool, interval, time_dict):
             try:
                 gripper.set_pos(tool_corrected)
                 t1 = time.perf_counter()
-                random_value = random.randint(0, 100)
+                random_value = random.randint(0, 100) if simulate_error else 0
                 time_dict['random_value'] = random_value
                 if random_value == 1:
                     raise Exception("Simulated random error for testing inside worker.")
@@ -74,9 +75,10 @@ def gripper_setter(theta_tool, interval, time_dict):
             print("[ERROR] Worker thread error detected. Exiting gripper_setter.")
             raise Exception("Worker thread error detected.")
         loop_start = time.perf_counter()
-        random_value_main = random.randint(0, 100)
+        random_value_main = random.randint(0, 100) if simulate_error else 0
         time_dict['random_value_main'] = random_value_main
         if random_value_main == 1:
+            stop_event.set()
             raise Exception("Simulated random error for testing in main loop.")
         time.sleep(interval)
         loop_end = time.perf_counter()
