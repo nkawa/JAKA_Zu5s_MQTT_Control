@@ -190,41 +190,50 @@ class Jaka_CON:
         return s
 
     def hand_control_loop(self, stop_event, error_event, lock, error_info):
+        last_tool_corrected = None
+        t_intv_hand = 0.16
         while True:
+            now = time.time()
             if stop_event.is_set():
                 break
             # 現在情報を取得しているかを確認
             if self.pose[19] != 1:
-                time.sleep(t_intv)
+                time.sleep(t_intv_hand)
                 continue
             # 目標値を取得しているかを確認
             if self.pose[20] != 1:
-                time.sleep(t_intv)
+                time.sleep(t_intv_hand)
                 continue
             # ツールの値を取得
             # 値0が意味を持つので共有メモリではオフセットをかけている
             tool = int(self.pose[13])
             if tool == 0:
+                time.sleep(t_intv_hand)
                 continue
             tool -= 100
             tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
             tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
-            try:
-                # 非同期処理で、0.08秒程度かかる
-                self.gripper.set_pos(tool_corrected)
-                # 同様
-                # read_pos = self.gripper.read_pos()
-                # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
-                # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
-                # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
-                time.sleep(0.08)
-            except Exception as e:
-                with lock:
-                    error_info['kind'] = "hand"
-                    error_info['msg'] = self.format_error(e)
-                    error_info['exception'] = e
-                error_event.set()
-                break
+            if tool_corrected != last_tool_corrected:
+                last_tool_corrected = tool_corrected
+                try:
+                    # 非同期処理で、0.08秒程度かかる
+                    self.gripper.set_pos(tool_corrected)
+                    # 同様
+                    # read_pos = self.gripper.read_pos()
+                    # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
+                    # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
+                    # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
+                    t_elapsed = time.time() - now
+                    t_wait = t_intv_hand - t_elapsed
+                    if t_wait > 0:
+                        time.sleep(t_wait)
+                except Exception as e:
+                    with lock:
+                        error_info['kind'] = "hand"
+                        error_info['msg'] = self.format_error(e)
+                        error_info['exception'] = e
+                    error_event.set()
+                    break
 
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
