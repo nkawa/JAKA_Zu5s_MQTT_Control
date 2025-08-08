@@ -559,9 +559,10 @@ class Jaka_CON:
                     self.robot.move_joint_servo(target_diff_speed_limited.tolist())
                 except Exception as e:
                     # JAKAでは無視できるエラーがあるか現状不明なためすべて上位に任せる
-                    error_info['kind'] = "robot"
-                    error_info['msg'] = self.robot.format_error(e)
-                    error_info['exception'] = e
+                    with lock:
+                        error_info['kind'] = "robot"
+                        error_info['msg'] = self.robot.format_error(e)
+                        error_info['exception'] = e
                     error_event.set()
                     stop_event.set()
                     break
