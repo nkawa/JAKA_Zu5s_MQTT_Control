@@ -268,6 +268,8 @@ class Jaka_MON:
                 enabled = False
             actual_joint_js["enabled"] = enabled
 
+            self.pose[30] = self.robot.is_emergency_stop_feed()
+
             error = {}
             # スレーブモード中にエラー情報を取得しようとすると、
             # スレーブモードが切断される。
