@@ -77,8 +77,11 @@ min_joint_limit = MIN_JOINT_LIMIT
 max_joint_limit = MAX_JOINT_LIMIT
 min_joint_limit = np.array(min_joint_limit)
 max_joint_limit = np.array(max_joint_limit)
-min_joint_soft_limit = min_joint_limit + 10
-max_joint_soft_limit = max_joint_limit - 10
+# VRとの齟齬の元になるので一時的に外す
+# min_joint_soft_limit = min_joint_limit + 10
+# max_joint_soft_limit = max_joint_limit - 10
+min_joint_soft_limit = min_joint_limit
+max_joint_soft_limit = max_joint_limit
 # 外部速度。単位は%
 speed_normal = 20
 speed_tool_change = 2
