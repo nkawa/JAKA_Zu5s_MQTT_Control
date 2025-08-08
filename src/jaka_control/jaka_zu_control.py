@@ -751,8 +751,8 @@ class Jaka_CON:
                     # NOTE: Jakaでは、どのエラーが自動復帰可能かの分類が
                     # ドキュメント、実験ともに不足していて現状よくわからないので、
                     # 緊急停止状態の場合のみ自動復帰せず、それ以外は自動復帰を試みる
-                    ess = self.robot.emergency_stop_status()
-                    if not ess:
+                    is_emergency_stop = int(self.pose[30])
+                    if not is_emergency_stop:
                         # 自動復帰を試行。失敗またはエラーの場合は通常モードに戻る。
                         # エラー直後の自動復帰処理に失敗しても、
                         # 同じ復帰処理を手動で行うと成功することもあるので

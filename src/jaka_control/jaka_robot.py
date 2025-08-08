@@ -339,11 +339,11 @@ class JakaRobotFeedback:
 
     def is_emergency_stop_feed(self) -> bool:
         with self.__Lock:
-            return self.latest_feed["emergency_stop"] == 0
+            return self.latest_feed["emergency_stop"]
 
     def is_protective_stop_feed(self) -> bool:
         with self.__Lock:
-            return self.latest_feed["protective_stop"] == 0
+            return self.latest_feed["protective_stop"]
 
     def get_current_pose_feed(self) -> List[float]:
         with self.__Lock:
