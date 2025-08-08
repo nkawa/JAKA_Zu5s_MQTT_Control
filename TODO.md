@@ -6,9 +6,9 @@
   - 最新のSDKに付属するドキュメントはJAKA TCP Protocol-en-V2.0.6_20240128だが、ここではコントローラーのバージョンの対象は明記されていない
   - 現状のコントローラーのバージョンは,get_versionによれば1.5.14_13_X64
   - 最新のオンラインドキュメントと最新のSDKに付属するドキュメントとで、説明が違うことがある。例えばget_robot_stateはオンラインではenable: trueが返りうるがPDFではenable: robot_enabledが返りうる。現状、手元のロボットでの返り値はPDFと一致している
-- [ ] ロボットとのソケット通信の高度化
+- [x] ロボットとのソケット通信の高度化
   - 現状はDOBOTのAPIを参考に実装されているが接続時の復帰などにやや問題あるかも
-- [ ] 制御時のエラーコードは0, 1, 2のみ (JAKA TCP Protocol-en-V2.0.6_20240128.pdf の Chapter 5)?
+- [x] 制御時のエラーコードは0, 1, 2のみ (JAKA TCP Protocol-en-V2.0.6_20240128.pdf の Chapter 5)?
   - https://www.jaka.com/docs/en/guide/tcpip.html の Error Code Short Lists によれば、ERROR_NOT_IN_SERVO_MODE="0x000350" #try to servo when not in servo mode とのことで、これを試してみたところ、{'errorCode': '-1', 'errorMsg': 'servoj command can only be excuted in servo move mode', 'cmdName': 'servo_j'}となり、0, 1, 2でもない
   - エラーコードはどうも信頼できないので、緊急停止以外は、1度自動復帰を試みる方針にしてみる。0xの方はFeedbackからならできる?
   - 成功か失敗かとエラーメッセージは即時にわかるので、try-catchのほうが使いやすいならそれに置き換えてエラーメッセージはログに取る
@@ -16,6 +16,24 @@
   - エラーが出たらゆっくり処理をして良い
 - [ ] JAKAのjog関数を使ったjogの実装
   - 優先度は低い
-- [ ] タイムアウト対策
+- [x] タイムアウト対策
 - [ ] TCP位置、ツール座標系の登録
   - とりあえずは不要
+- [ ] Feedbackのインターバルの短縮
+  - 現在は30ms-65ms程度
+  - 別に短縮しなくてもよいかも
+- [ ] connect robot時にgrippperが開閉するのが見えた
+  - gripperとの再接続のたびに開閉すると自動復帰処理などで不都合かも
+- [x] GUIのrobotトピックにエラーが表示されない。ログのMON-ROBOTやsave_feedには表示される
+  - エラーメッセージを取り逃すので、コールバック形式にしたほうが良いかもしれない
+  - robotトピックは瞬間的なものなのでこのままで良いかも
+- [x] enable/disableすると、feedにはエラーコード表示されるが、controlの返り値はエラーではない
+  - controlの返り値は役に立たない
+  - feedでjakaで本当にエラーかどうかはわからない、protective_stopによる判定?
+  - 重要なのはMQTTモード中のエラーなのでいまはエラー以外のものも出力しておいても良いかも
+- [ ] エラーによってprotective_stopに陥ると、clear_errorしないと動かないかもしれない
+  - 十分動作が安定したらわざとエラーを起こして確認する予定
+- [ ] ログの改良
+ - ログローテーションなど?MQTT制御中はあまりログは出力されないので大丈夫かもしれない
+ - feedにすべてを保存する必要はない
+ - logが完全なのでstatusやfeedはあえて保存しても情報としては薄いので運用時には不要かも

@@ -151,7 +151,19 @@ class JakaRobot:
         return res[1]
 
     def enter_servo_mode(self) -> None:
-        res = self.client_move.servo_move_enable(True)
+        self.logger.info("enter_servo_mode")
+        cnt = 0
+        if not self.is_in_servomove():
+            self.servo_move_enable(True)
+            while not self.is_in_servomove():
+                time.sleep(1)
+                cnt += 1
+                if cnt > 30:
+                    raise JakaRobotError(
+                        "Failed to enter servo mode in 30 seconds.")
+
+    def servo_move_enable(self, enable: bool) -> None:
+        res = self.client_move.servo_move_enable(enable)
         if res[0] != 0:
             raise JakaRobotError(res[1])
 
@@ -162,9 +174,16 @@ class JakaRobot:
             raise JakaRobotError(res[1])
 
     def leave_servo_mode(self) -> None:
-        res = self.client_move.servo_move_enable(False)
-        if res[0] != 0:
-            raise JakaRobotError(res[1])
+        self.logger.info("leave_servo_mode")
+        cnt = 0
+        if self.is_in_servomove():
+            self.servo_move_enable(False)
+            while self.is_in_servomove():
+                time.sleep(1)
+                cnt += 1
+                if cnt > 30:
+                    raise JakaRobotError(
+                        "Failed to leave servo mode in 30 seconds.")
 
     def disable(self) -> None:
         res = self.client_move.disable_robot()
@@ -190,7 +209,7 @@ class JakaRobot:
 
     def is_enabled(self) -> bool:
         res = self.client_move.get_robot_state()
-        if res[0] == 0:
+        if res[0] != 0:
             raise JakaRobotError(res[1])
         return res[2] == 1
 
@@ -281,7 +300,7 @@ class JakaRobotFeedback:
         # 最初のフィードが来るまで待つ
         while True:
             with self.__Lock:
-                if not self.latest_feed:
+                if self.latest_feed:
                     return
             time.sleep(0.008)
 
@@ -291,7 +310,7 @@ class JakaRobotFeedback:
         with self.__Lock:
             self.latest_feed = data
         errcode = data["errcode"]
-        is_error = str(errcode) != "0"
+        is_error = str(errcode) not in ["0", "0x0"]
         if is_error:
             error_related_feedback = self._get_error_related_feedback(data)
             self.logger.error(
@@ -320,11 +339,11 @@ class JakaRobotFeedback:
 
     def is_emergency_stop_feed(self) -> bool:
         with self.__Lock:
-            return self.latest_feed["emergency_stop"]
+            return self.latest_feed["emergency_stop"] == 0
 
     def is_protective_stop_feed(self) -> bool:
         with self.__Lock:
-            return self.latest_feed["protective_stop"]
+            return self.latest_feed["protective_stop"] == 0
 
     def get_current_pose_feed(self) -> List[float]:
         with self.__Lock:
@@ -349,7 +368,7 @@ class JakaRobotFeedback:
         with self.__Lock:
             data = self.latest_feed
             errcode = data["errcode"]
-            is_error = str(errcode) != "0"
+            is_error = str(errcode) not in ["0", "0x0"]
             if is_error:
                 error_related_feedback = self._get_error_related_feedback(data)
                 return [error_related_feedback]

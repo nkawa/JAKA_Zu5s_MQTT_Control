@@ -58,6 +58,7 @@ class Jaka_MON:
         self.robot = robot(
             ip_feed=ROBOT_IP,
             logger=self.robot_logger,
+            save_feed=SAVE,
         )
         self.robot.start()
         tool_id = int(os.environ["TOOL_ID"])
@@ -362,7 +363,10 @@ class Jaka_MON:
         else:
             handler = logging.StreamHandler()
         self.robot_logger.addHandler(handler)
-        self.robot_logger.setLevel(logging.WARNING)
+        if MOCK:
+            self.robot_logger.setLevel(logging.INFO)
+        else:
+            self.robot_logger.setLevel(logging.WARNING)
 
     def run_proc(self, monitor_dict, monitor_lock, slave_mode_lock, log_queue):
         self.setup_logger(log_queue)

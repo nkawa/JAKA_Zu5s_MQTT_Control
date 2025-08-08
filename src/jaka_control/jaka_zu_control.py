@@ -1,6 +1,7 @@
 # Jakaを制御する
 
 import logging
+import traceback
 from typing import Any, Dict, List, Literal, Tuple
 import datetime
 import time
@@ -15,11 +16,13 @@ import threading
 
 import numpy as np
 from dotenv import load_dotenv
-from pyDHgripper import AG95
 
+from .ag95_extension import ExtendedAG95
 from .jaka_robot import JakaRobot
 from .jaka_robot_mock import MockJakaRobot
-from .config import DEFAULT_JOINT, SHM_NAME, SHM_SIZE, ABS_JOINT_LIMIT, T_INTV
+from .config import (
+    DEFAULT_JOINT, MIN_JOINT_LIMIT, MAX_JOINT_LIMIT, SHM_NAME, SHM_SIZE, T_INTV
+)
 from .filter import SMAFilter
 from .interpolate import DelayedInterpolator
 from .tools import tool_infos, tool_classes, tool_base
@@ -70,8 +73,8 @@ t_intv = T_INTV
 n_windows *= int(0.008 / t_intv)
 reset_default_state = True
 default_joint = DEFAULT_JOINT
-min_joint_limit = [-360, -85, -175, -85, -360, -360]
-max_joint_limit = [360, 265, 175, 265, 360, 360]
+min_joint_limit = MIN_JOINT_LIMIT
+max_joint_limit = MAX_JOINT_LIMIT
 min_joint_limit = np.array(min_joint_limit)
 max_joint_limit = np.array(max_joint_limit)
 min_joint_soft_limit = min_joint_limit + 10
@@ -92,9 +95,19 @@ if save_control:
 class MockAG95:
     def __init__(self):
         self.pos = 1000
+        self.force = 20
 
     def set_pos(self, pos: int) -> None:
         self.pos = pos
+
+    def set_force(self, val: int) -> None:
+        self.force = val
+
+    def read_pos(self) -> int:
+        return self.pos
+    
+    def read_force(self) -> int:
+        return self.force
 
 
 class Jaka_CON:
@@ -119,7 +132,16 @@ class Jaka_CON:
             if MOCK:
                 self.gripper = MockAG95()
             else:
-                self.gripper = AG95()
+                # 接続のたびに開閉し最後に開かれる
+                self.gripper = ExtendedAG95()
+            self.logger.info("Connect to AG95 gripper")
+            # 最小の把持力 (45N) に設定
+            self.gripper.set_force(20)
+            force = self.gripper.read_force()
+            self.logger.info(f"AG95 gripper force: {force}")
+            # VRに合わせて閉じておく
+            self.gripper.set_pos(0)
+
         except Exception as e:
             self.logger.error("Error in initializing robot: ")
             self.logger.error(f"{self.robot.format_error(e)}")
@@ -159,6 +181,48 @@ class Jaka_CON:
             else:
                 self.logger.info("Process real-time priority set to: %u" % rt_app_priority)
 
+    def format_error(self, e: Exception) -> str:
+        s = "\n"
+        s = s + "Error trace: " + traceback.format_exc() + "\n"
+        return s
+
+    def hand_control_loop(self, stop_event, error_event, lock, error_info):
+        while True:
+            if stop_event.is_set():
+                break
+            # 現在情報を取得しているかを確認
+            if self.pose[19] != 1:
+                time.sleep(t_intv)
+                continue
+            # 目標値を取得しているかを確認
+            if self.pose[20] != 1:
+                time.sleep(t_intv)
+                continue
+            # ツールの値を取得
+            # 値0が意味を持つので共有メモリではオフセットをかけている
+            tool = int(self.pose[13])
+            if tool == 0:
+                continue
+            tool -= 100
+            tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
+            tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
+            try:
+                # 非同期処理で、0.08秒程度かかる
+                self.gripper.set_pos(tool_corrected)
+                # 同様
+                # read_pos = self.gripper.read_pos()
+                # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
+                # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
+                # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
+                time.sleep(0.08)
+            except Exception as e:
+                with lock:
+                    error_info['kind'] = "hand"
+                    error_info['msg'] = self.format_error(e)
+                    error_info['exception'] = e
+                error_event.set()
+                break
+
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
         self.last = 0
@@ -166,8 +230,22 @@ class Jaka_CON:
         self.pose[19] = 0
         self.pose[20] = 0
         target_stop = None
+        stop_event = threading.Event()
+        error_event = threading.Event()
+        lock = threading.Lock()
+        error_info = {}
+
+        hand_thread = threading.Thread(
+            target=self.hand_control_loop,
+            args=(stop_event, error_event, lock, error_info)
+        )
+        hand_thread.start()
+
         while True:
             now = time.time()
+
+            if not hand_thread.is_alive():
+                break
 
             # NOTE: テスト用データなど、時間が経つにつれて
             # targetの値がstateの値によらずにどんどん
@@ -178,6 +256,8 @@ class Jaka_CON:
             # ガッとロボットが動いてしまう。実際のシステムでは
             # targetはstateに依存するのでまた別に考える
             stop = self.pose[16]
+            if stop:
+                stop_event.set()
 
             # 現在情報を取得しているかを確認
             if self.pose[19] != 1:
@@ -185,7 +265,7 @@ class Jaka_CON:
                 # self.logger.info("Wait for monitoring")
                 # 取得する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 continue
 
             # 目標値を取得しているかを確認
@@ -194,7 +274,7 @@ class Jaka_CON:
                 # self.logger.info("Wait for target")
                 # 取得する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 continue
 
             # NOTE: 最初にVR側でロボットの状態値を取得できていれば追加してもよいかも
@@ -204,10 +284,7 @@ class Jaka_CON:
             #     continue
 
             # 関節の状態値
-            if MOCK:
-                state = self.robot.get_current_joint()
-            else:
-                state = self.pose[:6].copy()
+            state = self.pose[:6].copy()
 
             # 目標値
             target = self.pose[6:12].copy()
@@ -245,7 +322,7 @@ class Jaka_CON:
                 self.logger.info("Start sending control command")
                 # 制御する前に終了する場合即時終了可能
                 if stop:
-                    return True
+                    break
                 self.last = now
 
                 # 目標値を遅延を許して極力線形補間するためのセットアップ
@@ -478,18 +555,13 @@ class Jaka_CON:
                 try:
                     self.robot.move_joint_servo(target_diff_speed_limited.tolist())
                 except Exception as e:
-                    # JAKAでは無視できるエラーがあるか現状不明なためすべてraiseする
-                    raise e
-
-                if self.pose[13] == 1:
-                    th1 = threading.Thread(target=self.send_grip)
-                    th1.start()
-                    self.pose[13] = 0
-
-                if self.pose[13] == 2:
-                    th2 = threading.Thread(target=self.send_release)
-                    th2.start()
-                    self.pose[13] = 0
+                    # JAKAでは無視できるエラーがあるか現状不明なためすべて上位に任せる
+                    error_info['kind'] = "robot"
+                    error_info['msg'] = self.robot.format_error(e)
+                    error_info['exception'] = e
+                    error_event.set()
+                    stop_event.set()
+                    break
 
             t_elapsed = time.time() - now
             t_wait = t_intv - t_elapsed
@@ -507,10 +579,16 @@ class Jaka_CON:
                 # スレーブモードでは十分低速時に2回同じ位置のコマンドを送ると
                 # ロボットを停止させてスレーブモードを解除可能な状態になる
                 if (control == self.last_control).all():
-                    return True
+                    break
                 
             self.last_control = control
             self.last = now
+        
+        hand_thread.join()
+        if error_event.is_set():
+            # TODO: これで例外発生元のスタックトレースが取得できればこれで十分
+            raise error_info['exception']
+        return True
 
     def send_grip(self) -> None:
         try:
@@ -524,8 +602,34 @@ class Jaka_CON:
         except Exception:
             self.logger.exception("Error releasing hand")
 
+    def send_tool(self, tool_corrected: int) -> None:
+        """
+        TODO: こういうエラーがよくでるが一旦無視しても大丈夫
+        [2025-08-04 17:39:06.321020][CTRL][ERROR] Error setting tool position
+        Traceback (most recent call last):
+        File "/home/user/JAKA_Zu5s_MQTT_Control/src/jaka_control/jaka_zu_control.py", line 536, in send_tool
+            self.gripper.set_pos(tool_corrected)
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 221, in set_pos
+            self.write_uart(modbus_high_addr=0x01,
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 164, in write_uart
+            udata = self.read_uart()
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/pyDHgripper/AG95/Gripper.py", line 103, in read_uart
+            udata = self.ser.read_all()
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/serial/serialutil.py", line 652, in read_all
+            return self.read(self.in_waiting)
+        File "/home/user/JAKA_Zu5s_MQTT_Control/.venv/lib/python3.10/site-packages/serial/serialposix.py", line 595, in read
+            raise SerialException(
+        serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+        """
+        try:
+            self.gripper.set_pos(tool_corrected)
+        except Exception:
+            pass
+            # self.logger.exception("Error setting tool position")
+
     def enable(self) -> None:
         try:
+            self.logger.info("Enabling robot")
             self.robot.enable()
         except Exception as e:
             self.logger.error("Error enabling robot")
@@ -533,6 +637,7 @@ class Jaka_CON:
 
     def disable(self) -> None:
         try:
+            self.logger.info("Disabling robot")
             self.robot.disable()
         except Exception as e:
             self.logger.error("Error disabling robot")
@@ -540,6 +645,7 @@ class Jaka_CON:
 
     def default_pose(self) -> None:
         try:
+            self.logger.info("Moving to default pose")
             self.robot.move_joint_until_completion(self.default_joint)
         except Exception as e:
             self.logger.error("Error moving to default pose")
@@ -547,6 +653,7 @@ class Jaka_CON:
 
     def tidy_pose(self) -> None:
         try:
+            self.logger.info("Moving to tidy pose")
             self.robot.move_joint_until_completion(self.tidy_joint)
         except Exception as e:
             self.logger.error("Error moving to tidy pose")
@@ -554,6 +661,7 @@ class Jaka_CON:
 
     def clear_error(self) -> None:
         try:
+            self.logger.info("Clearing robot error")
             self.robot.clear_error()
         except Exception as e:
             self.logger.error("Error clearing robot error")
