@@ -300,7 +300,7 @@ class JakaRobotFeedback:
         # 最初のフィードが来るまで待つ
         while True:
             with self.__Lock:
-                if not self.latest_feed:
+                if self.latest_feed:
                     return
             time.sleep(0.008)
 
