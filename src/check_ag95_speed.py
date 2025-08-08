@@ -1,6 +1,6 @@
 import random
 import time
-from pyDHgripper import AG95
+from jaka_control.ag95_extension import ExtendedAG95
 from multiprocessing import Process, Value, Manager
 import ctypes
 import argparse
@@ -26,7 +26,7 @@ def theta_updater(theta_tool):
 
 
 def control_loop(theta_tool, time_dict, simulate_error=False):
-    gripper = AG95(port='/dev/ttyUSB0')
+    gripper = ExtendedAG95(port='/dev/ttyUSB0')
     stop_event = threading.Event()
     error_flag = threading.Event()
     error_info = {}

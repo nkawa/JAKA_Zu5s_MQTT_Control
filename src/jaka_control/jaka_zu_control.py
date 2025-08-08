@@ -16,8 +16,8 @@ import threading
 
 import numpy as np
 from dotenv import load_dotenv
-from pyDHgripper import AG95
 
+from .ag95_extension import ExtendedAG95
 from .jaka_robot import JakaRobot
 from .jaka_robot_mock import MockJakaRobot
 from .config import (
@@ -95,9 +95,19 @@ if save_control:
 class MockAG95:
     def __init__(self):
         self.pos = 1000
+        self.force = 20
 
     def set_pos(self, pos: int) -> None:
         self.pos = pos
+
+    def set_force(self, val: int) -> None:
+        self.force = val
+
+    def read_pos(self) -> int:
+        return self.pos
+    
+    def read_force(self) -> int:
+        return self.force
 
 
 class Jaka_CON:
@@ -122,7 +132,16 @@ class Jaka_CON:
             if MOCK:
                 self.gripper = MockAG95()
             else:
-                self.gripper = AG95()
+                # 接続のたびに開閉し最後に開かれる
+                self.gripper = ExtendedAG95()
+            self.logger.info("Connect to AG95 gripper")
+            # 最小の把持力 (45N) に設定
+            self.gripper.set_force(20)
+            force = self.gripper.read_force()
+            self.logger.info(f"AG95 gripper force: {force}")
+            # VRに合わせて閉じておく
+            self.gripper.set_pos(0)
+
         except Exception as e:
             self.logger.error("Error in initializing robot: ")
             self.logger.error(f"{self.robot.format_error(e)}")
@@ -188,12 +207,14 @@ class Jaka_CON:
             tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
             tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
             try:
-                # 同期処理で、0.08秒程度かかる
-                # 制御周期が明確でないデバイスは、処理が終わった段階で次の処理を行う
-                # ようにすれば最瀕で制御できると考えてこの設計にしている
+                # 非同期処理で、0.08秒程度かかる
                 self.gripper.set_pos(tool_corrected)
                 # 同様
                 # read_pos = self.gripper.read_pos()
+                # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
+                # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
+                # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
+                time.sleep(0.08)
             except Exception as e:
                 with lock:
                     error_info['kind'] = "hand"

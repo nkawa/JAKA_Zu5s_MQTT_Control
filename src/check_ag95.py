@@ -1,5 +1,5 @@
 import time
-from pyDHgripper import AG95
+from jaka_control.ag95_extension import ExtendedAG95
 
 
 if __name__ == '__main__':
@@ -20,13 +20,14 @@ if __name__ == '__main__':
     """
     check_move = True
     # この呼び出しでグリッパーの開閉が1度実行される
-    gripper = AG95(port='/dev/ttyUSB0')
+    gripper = ExtendedAG95(port='/dev/ttyUSB0')
     # 0：In motion;
     # 1：Reached position
     # 2：Object caught
     # 3：Object dropped
     print(f"{gripper.read_state()=}")
     print(f"{gripper.read_pos()=}")
+    print(f"{gripper.read_force()=}")
 
     # Grip
     if check_move:
