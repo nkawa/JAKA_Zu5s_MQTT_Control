@@ -268,8 +268,8 @@ class Jaka_CON:
             # TODO: これがメインスレッドを遅くしている可能性ありだが
             # この1行だけでとも思う。要検証
             # 但しハンド由来のエラーでループを終了できなくなる
-            # if not hand_thread.is_alive():
-            #     break
+            if not hand_thread.is_alive():
+                break
 
             # NOTE: テスト用データなど、時間が経つにつれて
             # targetの値がstateの値によらずにどんどん
