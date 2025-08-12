@@ -270,9 +270,12 @@ class Jaka_MON:
                         width = None
                         force = None
             actual_joint_js["tool"] = {}
-            actual_joint_js["tool"]["width"] = width
-            # actual_joint_js["tool"]["force"] = force
-            actual_joint_js["tool"]["caught"] = caught
+            if width is not None:
+                actual_joint_js["tool"]["width"] = width
+            if force is not None:
+                actual_joint_js["tool"]["force"] = force
+            if caught is not None:
+                actual_joint_js["tool"]["caught"] = caught
 
             # モータがONか
             try:
