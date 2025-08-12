@@ -77,8 +77,11 @@ min_joint_limit = MIN_JOINT_LIMIT
 max_joint_limit = MAX_JOINT_LIMIT
 min_joint_limit = np.array(min_joint_limit)
 max_joint_limit = np.array(max_joint_limit)
-min_joint_soft_limit = min_joint_limit + 10
-max_joint_soft_limit = max_joint_limit - 10
+# VRとの齟齬の元になるので一時的に外す
+# min_joint_soft_limit = min_joint_limit + 10
+# max_joint_soft_limit = max_joint_limit - 10
+min_joint_soft_limit = min_joint_limit
+max_joint_soft_limit = max_joint_limit
 # 外部速度。単位は%
 speed_normal = 20
 speed_tool_change = 2
@@ -138,7 +141,7 @@ class Jaka_CON:
             # 最小の把持力 (45N) に設定
             self.gripper.set_force(20)
             force = self.gripper.read_force()
-            self.logger.info(f"AG95 gripper force: {force}")
+            self.logger.info(f"AG95 gripper force: {force} %")
             # VRに合わせて閉じておく
             self.gripper.set_pos(0)
 
@@ -187,41 +190,55 @@ class Jaka_CON:
         return s
 
     def hand_control_loop(self, stop_event, error_event, lock, error_info):
+        last_tool_corrected = None
+        t_intv_hand = 0.16
         while True:
+            now = time.time()
             if stop_event.is_set():
                 break
             # 現在情報を取得しているかを確認
             if self.pose[19] != 1:
-                time.sleep(t_intv)
+                time.sleep(t_intv_hand)
                 continue
             # 目標値を取得しているかを確認
             if self.pose[20] != 1:
-                time.sleep(t_intv)
+                time.sleep(t_intv_hand)
                 continue
             # ツールの値を取得
             # 値0が意味を持つので共有メモリではオフセットをかけている
             tool = int(self.pose[13])
             if tool == 0:
+                time.sleep(t_intv_hand)
                 continue
             tool -= 100
             tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
             tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
-            try:
-                # 非同期処理で、0.08秒程度かかる
-                self.gripper.set_pos(tool_corrected)
-                # 同様
-                # read_pos = self.gripper.read_pos()
-                # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
-                # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
-                # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
-                time.sleep(0.08)
-            except Exception as e:
-                with lock:
-                    error_info['kind'] = "hand"
-                    error_info['msg'] = self.format_error(e)
-                    error_info['exception'] = e
-                error_event.set()
-                break
+            if tool_corrected != last_tool_corrected:
+                last_tool_corrected = tool_corrected
+                try:
+                    # 非同期処理で、0.08秒程度かかる
+                    self.gripper.set_pos(tool_corrected)
+                    # 同様
+                    # read_pos = self.gripper.read_pos()
+                    # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
+                    # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
+                    # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
+                    t_elapsed = time.time() - now
+                    t_wait = t_intv_hand - t_elapsed
+                    if t_wait > 0:
+                        time.sleep(t_wait)
+                except Exception as e:
+                    with lock:
+                        error_info['kind'] = "hand"
+                        error_info['msg'] = self.format_error(e)
+                        error_info['exception'] = e
+                    error_event.set()
+                    break
+            else:
+                t_elapsed = time.time() - now
+                t_wait = t_intv_hand - t_elapsed
+                if t_wait > 0:
+                    time.sleep(t_wait)
 
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
@@ -235,17 +252,24 @@ class Jaka_CON:
         lock = threading.Lock()
         error_info = {}
 
-        hand_thread = threading.Thread(
-            target=self.hand_control_loop,
-            args=(stop_event, error_event, lock, error_info)
-        )
-        hand_thread.start()
+        use_hand_thread = True
+        if use_hand_thread:
+            hand_thread = threading.Thread(
+                target=self.hand_control_loop,
+                args=(stop_event, error_event, lock, error_info)
+            )
+            hand_thread.start()
+        else:
+            last_tool_corrected = None
 
         while True:
             now = time.time()
 
-            if not hand_thread.is_alive():
-                break
+            # TODO: これがメインスレッドを遅くしている可能性ありだが
+            # この1行だけでとも思う。要検証
+            # 但しハンド由来のエラーでループを終了できなくなる
+            # if not hand_thread.is_alive():
+            #     break
 
             # NOTE: テスト用データなど、時間が経つにつれて
             # targetの値がstateの値によらずにどんどん
@@ -556,12 +580,26 @@ class Jaka_CON:
                     self.robot.move_joint_servo(target_diff_speed_limited.tolist())
                 except Exception as e:
                     # JAKAでは無視できるエラーがあるか現状不明なためすべて上位に任せる
-                    error_info['kind'] = "robot"
-                    error_info['msg'] = self.robot.format_error(e)
-                    error_info['exception'] = e
+                    with lock:
+                        error_info['kind'] = "robot"
+                        error_info['msg'] = self.robot.format_error(e)
+                        error_info['exception'] = e
                     error_event.set()
                     stop_event.set()
                     break
+
+                if not use_hand_thread:
+                    tool = self.pose[13]
+                    if tool != 0:
+                        tool -= 100
+                        tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
+                        tool_corrected = \
+                            max(min(int(round(tool_corrected)), 1000), 0)
+                        if tool_corrected != last_tool_corrected:
+                            th = threading.Thread(
+                                target=self.send_tool, args=(tool_corrected,))
+                            th.start()
+                            last_tool_corrected = tool_corrected
 
             t_elapsed = time.time() - now
             t_wait = t_intv - t_elapsed
@@ -572,7 +610,7 @@ class Jaka_CON:
             t_elapsed = time.time() - now
             if t_elapsed > t_intv * 2:
                 self.logger.warning(
-                    f"Control loop is 2 times as slow as expected: "
+                    f"Control loop is more than 2 times as slow as expected: "
                     f"{t_elapsed} seconds")
 
             if stop:
@@ -584,7 +622,7 @@ class Jaka_CON:
             self.last_control = control
             self.last = now
         
-        hand_thread.join()
+        # hand_thread.join()
         if error_event.is_set():
             # TODO: これで例外発生元のスタックトレースが取得できればこれで十分
             raise error_info['exception']
@@ -751,8 +789,8 @@ class Jaka_CON:
                     # NOTE: Jakaでは、どのエラーが自動復帰可能かの分類が
                     # ドキュメント、実験ともに不足していて現状よくわからないので、
                     # 緊急停止状態の場合のみ自動復帰せず、それ以外は自動復帰を試みる
-                    ess = self.robot.emergency_stop_status()
-                    if not ess:
+                    is_emergency_stop = int(self.pose[30])
+                    if not is_emergency_stop:
                         # 自動復帰を試行。失敗またはエラーの場合は通常モードに戻る。
                         # エラー直後の自動復帰処理に失敗しても、
                         # 同じ復帰処理を手動で行うと成功することもあるので

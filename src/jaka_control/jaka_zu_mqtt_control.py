@@ -223,6 +223,7 @@ class ProcessManager:
         # [22]: 棚の上の箱を作業台に置くデモの完了状態。0: 未定義。1: 成功。2: 失敗
         # [23]: 現在のツール番号
         # [24:30]: 関節の制御値
+        # [30]: 緊急停止フラグ。0: 停止でない。1: 停止
         self.ar = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf) # 共有メモリ上の Array
         self.ar[:] = 0
         self.manager = multiprocessing.Manager()
