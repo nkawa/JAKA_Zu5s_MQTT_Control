@@ -293,7 +293,6 @@ class JakaRobotFeedback:
             self.save_feed_fd = None
 
     def start(self):
-        self.logger.info("start")
         self.latest_feed = {}
         self.client_feed.login()
         self.client_feed.set_callback(self._on_feed)
@@ -310,11 +309,15 @@ class JakaRobotFeedback:
         with self.__Lock:
             self.latest_feed = data
         errcode = data["errcode"]
-        is_error = str(errcode) not in ["0", "0x0"]
-        if is_error:
+        is_errcode_nonzero = str(errcode) not in ["0", "0x0"]
+        if is_errcode_nonzero:    
             error_related_feedback = self._get_error_related_feedback(data)
-            self.logger.error(
-                f"Error in feedback: {error_related_feedback}")
+            if data["protective_stop"] or data["emergency_stop"]:
+                self.logger.error(
+                    f"Error in feedback: {error_related_feedback}")
+            else:
+                self.logger.info(
+                    f"Info in feedback: {error_related_feedback}")
 
     def _get_error_related_feedback(self, data):
         error_related_feedback = {

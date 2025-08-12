@@ -141,7 +141,7 @@ class Jaka_CON:
             # 最小の把持力 (45N) に設定
             self.gripper.set_force(20)
             force = self.gripper.read_force()
-            self.logger.info(f"AG95 gripper force: {force}")
+            self.logger.info(f"AG95 gripper force: {force} %")
             # VRに合わせて閉じておく
             self.gripper.set_pos(0)
 
@@ -610,7 +610,7 @@ class Jaka_CON:
             t_elapsed = time.time() - now
             if t_elapsed > t_intv * 2:
                 self.logger.warning(
-                    f"Control loop is 2 times as slow as expected: "
+                    f"Control loop is more than 2 times as slow as expected: "
                     f"{t_elapsed} seconds")
 
             if stop:
