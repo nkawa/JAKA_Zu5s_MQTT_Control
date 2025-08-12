@@ -271,7 +271,7 @@ class Jaka_MON:
                         force = None
             actual_joint_js["tool"] = {}
             actual_joint_js["tool"]["width"] = width
-            actual_joint_js["tool"]["force"] = force
+            # actual_joint_js["tool"]["force"] = force
             actual_joint_js["tool"]["caught"] = caught
 
             # モータがONか
@@ -353,6 +353,7 @@ class Jaka_MON:
                     pose=actual_tcp_pose,
                     width=width,
                     force=force,
+                    caught=caught,
                     forces=forces,
                     error=error,
                     time=now,
