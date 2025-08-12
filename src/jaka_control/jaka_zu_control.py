@@ -234,6 +234,11 @@ class Jaka_CON:
                         error_info['exception'] = e
                     error_event.set()
                     break
+            else:
+                t_elapsed = time.time() - now
+                t_wait = t_intv_hand - t_elapsed
+                if t_wait > 0:
+                    time.sleep(t_wait)
 
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
@@ -247,13 +252,15 @@ class Jaka_CON:
         lock = threading.Lock()
         error_info = {}
 
-        # hand_thread = threading.Thread(
-        #     target=self.hand_control_loop,
-        #     args=(stop_event, error_event, lock, error_info)
-        # )
-        # hand_thread.start()
-
-        last_tool_corrected = None
+        use_hand_thread = True
+        if use_hand_thread:
+            hand_thread = threading.Thread(
+                target=self.hand_control_loop,
+                args=(stop_event, error_event, lock, error_info)
+            )
+            hand_thread.start()
+        else:
+            last_tool_corrected = None
 
         while True:
             now = time.time()
@@ -581,17 +588,18 @@ class Jaka_CON:
                     stop_event.set()
                     break
 
-                tool = self.pose[13]
-                if tool != 0:
-                    tool -= 100
-                    tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
-                    tool_corrected = \
-                        max(min(int(round(tool_corrected)), 1000), 0)
-                    if tool_corrected != last_tool_corrected:
-                        th = threading.Thread(
-                            target=self.send_tool, args=(tool_corrected,))
-                        th.start()
-                        last_tool_corrected = tool_corrected
+                if not use_hand_thread:
+                    tool = self.pose[13]
+                    if tool != 0:
+                        tool -= 100
+                        tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
+                        tool_corrected = \
+                            max(min(int(round(tool_corrected)), 1000), 0)
+                        if tool_corrected != last_tool_corrected:
+                            th = threading.Thread(
+                                target=self.send_tool, args=(tool_corrected,))
+                            th.start()
+                            last_tool_corrected = tool_corrected
 
             t_elapsed = time.time() - now
             t_wait = t_intv - t_elapsed
