@@ -18,6 +18,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from .ag95_extension import ExtendedAG95
+from .ag95_mock import MockAG95
 from .jaka_robot import JakaRobot
 from .jaka_robot_mock import MockJakaRobot
 from .config import (
@@ -93,24 +94,6 @@ save_control = SAVE
 if save_control:
     save_path = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_control.jsonl"
     f = open(save_path, "w")
-
-
-class MockAG95:
-    def __init__(self):
-        self.pos = 1000
-        self.force = 20
-
-    def set_pos(self, pos: int) -> None:
-        self.pos = pos
-
-    def set_force(self, val: int) -> None:
-        self.force = val
-
-    def read_pos(self) -> int:
-        return self.pos
-    
-    def read_force(self) -> int:
-        return self.force
 
 
 class Jaka_CON:
