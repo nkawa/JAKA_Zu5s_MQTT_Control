@@ -211,6 +211,7 @@ class ProcessManager:
         # self.arの要素の説明
         # [0:6]: 関節の状態値
         # [6:12]: 関節の目標値
+        # [12]: ハンドの状態値
         # [13]: ハンドの目標値
         # [14]: 0: 必ず通常モード。1: 基本的にスレーブモード（通常モードになっている場合もある）
         # [15]: 0: mqtt_control実行中でない。1: mqtt_control実行中
@@ -224,6 +225,7 @@ class ProcessManager:
         # [23]: 現在のツール番号
         # [24:30]: 関節の制御値
         # [30]: 緊急停止フラグ。0: 停止でない。1: 停止
+        # [31]: ハンドの把持の有無。0: 把持していない。1: 把持している。-1: 不明
         self.ar = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf) # 共有メモリ上の Array
         self.ar[:] = 0
         self.manager = multiprocessing.Manager()

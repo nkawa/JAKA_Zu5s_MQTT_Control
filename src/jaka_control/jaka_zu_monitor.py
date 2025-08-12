@@ -228,11 +228,13 @@ class Jaka_MON:
             if is_in_tool_change:
                 width = None
                 force = None
+                caught = None
             else:
                 # ツール依存の部分はまとめるべき
                 if tool_id == -1:
                     width = None
                     force = None
+                    caught = None
                 else:
                     if self.hand_name == "onrobot_2fg7":
                         try:
@@ -252,9 +254,25 @@ class Jaka_MON:
                     elif self.hand_name == "plate_holder":
                         width = None
                         force = None
+                    elif self.hand_name == "dhrobotics_ag95":
+                        width = self.pose[12]
+                        if width == 0:
+                            width = None
+                        else:
+                            width = int(width - 100)
+                        force = None
+                        caught = self.pose[31]
+                        if caught == 0:
+                            caught = None
+                        else:
+                            caught = int(self.pose[31] - 100)
                     else:
                         width = None
                         force = None
+            actual_joint_js["tool"] = {}
+            actual_joint_js["tool"]["width"] = width
+            actual_joint_js["tool"]["force"] = force
+            actual_joint_js["tool"]["caught"] = caught
 
             # モータがONか
             try:
