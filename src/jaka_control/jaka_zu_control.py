@@ -1263,6 +1263,8 @@ class Jaka_CON:
                     self.tidy_pose()
                 elif command["command"] == "release_hand":
                     self.send_release()
+                    # 十分な時間待つ
+                    time.sleep(3)
                     self.get_hand_state()
                 elif command["command"] == "clear_error":
                     self.clear_error()
