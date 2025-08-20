@@ -424,7 +424,7 @@ class MQTTWin:
                 row=row+2+3*i, column=0, padx=2, pady=2,
                 sticky="ew", columnspan=8, rowspan=2)
             self.topic_monitors[topic_type] = scrolledtext.ScrolledText(
-                frame_topic, height=3)
+                frame_topic, height=2)
             self.topic_monitors[topic_type].pack(
                 side="left", padx=2, expand=True, fill="both")
 
