@@ -85,7 +85,7 @@ class MicrosecondFormatter(logging.Formatter):
 
 class QueueListener(object):
     """
-    NOTE: Copied from logging.handlers.QueueListener.
+    NOTE: Copied and modified from logging.handlers.QueueListener.
 
     This class implements an internal threaded listener which watches for
     LogRecords being added to a queue, removes them and passes them to a
@@ -102,6 +102,7 @@ class QueueListener(object):
         self.handlers = handlers
         self._thread = None
         self.respect_handler_level = respect_handler_level
+        self._event = threading.Event()
 
     def dequeue(self, block):
         """
@@ -166,6 +167,8 @@ class QueueListener(object):
                     if has_task_done:
                         q.task_done()
                     break
+                if self._event.is_set():
+                    break
                 self.handle(record)
                 if has_task_done:
                     q.task_done()
@@ -191,6 +194,7 @@ class QueueListener(object):
         may be some records still left on the queue, which won't be processed.
         """
         self.enqueue_sentinel()
+        self._event.set()
         self._thread.join()
         self._thread = None
 
