@@ -484,6 +484,8 @@ class Jaka_CON:
                 # その速度を保持し続けようとするので、そこに差分を足すと
                 # どんどん加速していくのでは。
                 # 遅延があることも影響しているかも。
+                # NOTE(20250813): targetがstateのフィードバックを受けていない場合は
+                # target_alignedは、stateとtargetが乖離するので不適切
                 target_diff = target_delayed - self.last_target_delayed
                 target_aligned = state + target_diff
                 last_target_filtered = _filter.previous_filtered_measurement
@@ -567,6 +569,14 @@ class Jaka_CON:
             if save_control:
                 # 分析用データ保存
                 datum = dict(
+                    kind="state",
+                    joint=state.tolist(),
+                    time=now,
+                )
+                js = json.dumps(datum)
+                f.write(js + "\n")
+
+                datum = dict(
                     kind="target",
                     joint=target_raw.tolist(),
                     time=now,
@@ -595,6 +605,7 @@ class Jaka_CON:
                     joint=control.tolist(),
                     time=now,
                     max_ratio=max_ratio,
+                    accel_max_ratio=accel_max_ratio,
                 )
                 js = json.dumps(datum)
                 f.write(js + "\n")
