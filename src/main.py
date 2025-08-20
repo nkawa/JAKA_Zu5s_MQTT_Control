@@ -94,7 +94,7 @@ class MQTTWin:
  
         self.root = root
         self.root.title("MQTT-JakaZu5s Controller")
-        self.root.geometry("1100x1080")
+        self.root.geometry("1100x1000")
 
         for col in range(8):
             self.root.grid_columnconfigure(col, weight=1, uniform="equal")
