@@ -42,8 +42,9 @@ class Jaka_MQTT:
     def __init__(self):
         self.gripState = False
         self.mqtt_ctrl_topic = None
+        self.last_registered = None
 
-    def on_connect(self,client, userdata, flag, rc):
+    def on_connect(self, client, userdata, connect_flags, reason_code, properties):
         # ロボットのメタ情報の中身はとりあえず
         date = datetime.now().strftime('%c')
         if MQTT_MODE == "metawork":
@@ -65,6 +66,7 @@ class Jaka_MQTT:
                 self.mqtt_control_dict.clear()
                 self.mqtt_control_dict.update(info)
             self.logger.info("publish to: " + MQTT_MANAGE_TOPIC + "/register")
+            self.last_registered = time.time()
             self.client.subscribe(MQTT_MANAGE_RCV_TOPIC)
             self.logger.info("subscribe to: " + MQTT_MANAGE_RCV_TOPIC)
         else:
@@ -72,11 +74,18 @@ class Jaka_MQTT:
             self.mqtt_ctrl_topic = MQTT_CTRL_TOPIC
             self.client.subscribe(self.mqtt_ctrl_topic)
 
-    def on_disconnect(self,client, userdata, rc):
-        if  rc != 0:
-            self.logger.warning("Unexpected disconnection.")
+    def on_disconnect(
+        self,
+        client,
+        userdata,
+        disconnect_flags,
+        reason_code,
+        properties,
+    ):
+        if reason_code != 0:
+            self.logger.warning("MQTT Unexpected disconnection.")
 
-    def on_message(self,client, userdata, msg):
+    def on_message(self, client, userdata, msg):
         if msg.topic == self.mqtt_ctrl_topic:
             js = json.loads(msg.payload)
 
@@ -147,21 +156,22 @@ class Jaka_MQTT:
             self.logger.warning("not subscribe msg" + msg.topic)
 
     def connect_mqtt(self):
-        self.client = mqtt.Client()  
+        self.client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2) 
         # MQTTの接続設定
         self.client.on_connect = self.on_connect         # 接続時のコールバック関数を登録
         self.client.on_disconnect = self.on_disconnect   # 切断時のコールバックを登録
         self.client.on_message = self.on_message         # メッセージ到着時のコールバック
         self.client.connect(MQTT_SERVER, 1883, 60)
-        self.client.loop_forever()   # 通信処理開始
+        self.client.loop_start()   # 通信処理開始
 
     def setup_logger(self, log_queue):
         self.logger = logging.getLogger("MQTT")
         if log_queue is not None:
-            handler = logging.handlers.QueueHandler(log_queue)
+            self.handler = logging.handlers.QueueHandler(log_queue)
         else:
-            handler = logging.StreamHandler()
-        self.logger.addHandler(handler)
+            self.handler = logging.StreamHandler()
+        self.logger.addHandler(self.handler)
         self.logger.setLevel(logging.INFO)
 
     def run_proc(self, mqtt_control_dict, mqtt_control_lock, log_queue):
@@ -172,32 +182,52 @@ class Jaka_MQTT:
         self.mqtt_control_dict = mqtt_control_dict
         self.mqtt_control_lock = mqtt_control_lock
         self.connect_mqtt()
-
-
-class Jaka_Debug:
-    def setup_logger(self, log_queue):
-        self.logger = logging.getLogger("DBG")
-        if log_queue is not None:
-            handler = logging.handlers.QueueHandler(log_queue)
-        else:
-            handler = logging.StreamHandler()
-        self.logger.addHandler(handler)
-        self.logger.setLevel(logging.INFO)
-
-    def run_proc(self, monitor_dict, log_queue):
-        self.setup_logger(log_queue)
-        self.sm = mp.shared_memory.SharedMemory(SHM_NAME)
-        self.ar = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf)
         while True:
-            diff = self.ar[6:12]-self.ar[0:6]
-            diff *=1000
-            diff = diff.astype('int')
-            self.logger.debug(f"State: {self.ar[0:6]}, Target: {self.ar[6:12]}")
-            self.logger.debug(f"Diff: {diff}")
-            sm = ",".join(str(int(round(x))) for x in self.ar)
-            self.logger.debug(f"SharedMemory (rounded): {sm}")
-            self.logger.debug(f"Monitor: {monitor_dict}")
-            time.sleep(2)
+            # 30分ごとに再登録
+            now = time.time()
+            if (self.last_registered is not None and 
+                self.last_registered + 60 * 30 < now):
+                date = datetime.now().strftime('%c')
+                if MQTT_MODE == "metawork":
+                    info = {
+                        "date": date,
+                        "device": {
+                            "agent": "none",
+                            "cookie": "none",
+                        },
+                        "devType": "robot",
+                        "type": ROBOT_MODEL,
+                        "version": "none",
+                        "devId": ROBOT_UUID,
+                    }
+                    self.client.publish(
+                        MQTT_MANAGE_TOPIC + "/register", json.dumps(info))
+                    with self.mqtt_control_lock:
+                        info["topic_type"] = "mgr/register"
+                        info["topic"] = MQTT_MANAGE_TOPIC + "/register"
+                        self.mqtt_control_dict.clear()
+                        self.mqtt_control_dict.update(info)
+                    self.logger.info(
+                        "re-publish to: " + MQTT_MANAGE_TOPIC + "/register")
+                    self.last_registered = now
+
+            # プロセス終了時
+            if self.pose[32] == 1:
+                if MQTT_MODE == "metawork":
+                    info = {"devId": ROBOT_UUID}
+                    self.client.publish(
+                        MQTT_MANAGE_TOPIC + "/unregister", json.dumps(info))
+                    self.logger.info(
+                        "publish to: " + MQTT_MANAGE_TOPIC + "/unregister")
+                self.client.loop_stop()
+                self.client.disconnect()
+                self.sm.close()
+                time.sleep(1)
+                self.logger.info("Process stopped")
+                self.handler.close()
+                break
+
+            time.sleep(1)
 
 
 class ProcessManager:
@@ -211,6 +241,7 @@ class ProcessManager:
         # self.arの要素の説明
         # [0:6]: 関節の状態値
         # [6:12]: 関節の目標値
+        # [12]: ハンドの状態値
         # [13]: ハンドの目標値
         # [14]: 0: 必ず通常モード。1: 基本的にスレーブモード（通常モードになっている場合もある）
         # [15]: 0: mqtt_control実行中でない。1: mqtt_control実行中
@@ -224,6 +255,8 @@ class ProcessManager:
         # [23]: 現在のツール番号
         # [24:30]: 関節の制御値
         # [30]: 緊急停止フラグ。0: 停止でない。1: 停止
+        # [31]: ハンドの把持の有無。0: 把持していない。1: 把持している。-1: 不明
+        # [32]: プロセス終了フラグ
         self.ar = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf) # 共有メモリ上の Array
         self.ar[:] = 0
         self.manager = multiprocessing.Manager()
@@ -236,9 +269,14 @@ class ProcessManager:
         self.state_recv_mqtt = False
         self.state_monitor = False
         self.state_control = False
+        self.state_monitor_gui = False
         self.log_queue = multiprocessing.Queue()
         if MOCK:
             self.mock_sm_manager = MockJakaRobotSharedMemoryManager()
+        self.recvP = None
+        self.monP = None
+        self.ctrlP = None
+        self.monitor_guiP = None
 
     def startRecvMQTT(self):
         self.recv = Jaka_MQTT()
@@ -272,20 +310,25 @@ class ProcessManager:
         self.ctrlP.start()
         self.state_control = True
 
-    def startDebug(self):
-        self.debug = Jaka_Debug()
-        self.debugP = Process(
-            target=self.debug.run_proc,
-            args=(self.monitor_dict, self.log_queue),
-            name="Jaka-Zu-debug")
-        self.debugP.start()
-
     def startMonitorGUI(self):
         self.monitor_guiP = Process(
             target=run_joint_monitor_gui,
             name="Jaka-Zu-monitor-gui",
         )
         self.monitor_guiP.start()
+        self.state_monitor_gui = True
+
+    def stop_all_processes(self):
+        self.ar[32] = 1
+        self.ar[16] = 1
+        if self.recvP is not None:
+            self.recvP.join()
+        if self.monP is not None:
+            self.monP.join()
+        if self.ctrlP is not None:
+            self.ctrlP.join()
+        if self.monitor_guiP is not None:
+            self.monitor_guiP.join()
 
     def _send_command_to_control(self, command):
         self.main_pipe.send(command)

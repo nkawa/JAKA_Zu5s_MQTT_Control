@@ -18,6 +18,7 @@ import numpy as np
 from dotenv import load_dotenv
 
 from .ag95_extension import ExtendedAG95
+from .ag95_mock import MockAG95
 from .jaka_robot import JakaRobot
 from .jaka_robot_mock import MockJakaRobot
 from .config import (
@@ -95,24 +96,6 @@ if save_control:
     f = open(save_path, "w")
 
 
-class MockAG95:
-    def __init__(self):
-        self.pos = 1000
-        self.force = 20
-
-    def set_pos(self, pos: int) -> None:
-        self.pos = pos
-
-    def set_force(self, val: int) -> None:
-        self.force = val
-
-    def read_pos(self) -> int:
-        return self.pos
-    
-    def read_force(self) -> int:
-        return self.force
-
-
 class Jaka_CON:
     def __init__(self):
         self.default_joint = default_joint
@@ -135,19 +118,51 @@ class Jaka_CON:
             if MOCK:
                 self.gripper = MockAG95()
             else:
-                # 接続のたびに開閉し最後に開かれる
                 self.gripper = ExtendedAG95()
+            # 接続のたびに開閉し最後に開かれる
+            # 非同期なので待つ
+            time.sleep(1)
             self.logger.info("Connect to AG95 gripper")
-            # 最小の把持力 (45N) に設定
+            # VRに合わせて閉じておく
+            # 非同期なので待つ
+            self.gripper.set_pos(0)
+            time.sleep(1)
+            # 最小の把持力 (20% = 45N) に設定
             self.gripper.set_force(20)
             force = self.gripper.read_force()
             self.logger.info(f"AG95 gripper force: {force} %")
-            # VRに合わせて閉じておく
-            self.gripper.set_pos(0)
-
+             # 状態値を取得しておく
+            self.get_hand_state()
         except Exception as e:
             self.logger.error("Error in initializing robot: ")
             self.logger.error(f"{self.robot.format_error(e)}")
+
+    def get_hand_state(self):
+        # ハンドの状態値を取得して共有メモリに格納する
+        # 非同期処理で、0.08秒程度かかる
+        state_corrected = self.gripper.read_state()
+        # 非同期処理で、0.08秒程度かかる    
+        read_tool_corrected = self.gripper.read_pos()
+        read_tool = \
+            read_tool_corrected / (1000 - 0) * (89 - (-1)) + (-1)
+        read_tool = max(min(int(round(read_tool)), 89), -1)
+        # 0に意味があるのでオフセットをもたせる
+        read_tool += 100
+        # 把持しているかどうかだけでよい
+        # state_correctedの定義
+        # 0：In motion
+        # 1：Reached position
+        # 2：Object caught
+        # 3：Object dropped
+        # 物体を把持している状態で動き出すとき
+        # 0になることあり。常に取得していれば判別できるが、取得コストが
+        # あるので不明と変換する
+        correct_map = {0: -1, 1: 0, 2: 1, 3: 0}
+        state = correct_map[state_corrected]
+        # 0に意味があるのでオフセットをもたせる
+        state += 100
+        self.pose[12] = read_tool
+        self.pose[31] = state
 
     def find_and_setup_hand(self, tool_id):
         connected = False
@@ -192,6 +207,7 @@ class Jaka_CON:
     def hand_control_loop(self, stop_event, error_event, lock, error_info):
         last_tool_corrected = None
         t_intv_hand = 0.16
+        last_tool_corrected_time = time.time()
         while True:
             now = time.time()
             if stop_event.is_set():
@@ -214,19 +230,9 @@ class Jaka_CON:
             tool_corrected = (tool - (-1)) / (89 - (-1)) * (1000 - 0)
             tool_corrected = max(min(int(round(tool_corrected)), 1000), 0)
             if tool_corrected != last_tool_corrected:
-                last_tool_corrected = tool_corrected
                 try:
                     # 非同期処理で、0.08秒程度かかる
                     self.gripper.set_pos(tool_corrected)
-                    # 同様
-                    # read_pos = self.gripper.read_pos()
-                    # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
-                    # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
-                    # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
-                    t_elapsed = time.time() - now
-                    t_wait = t_intv_hand - t_elapsed
-                    if t_wait > 0:
-                        time.sleep(t_wait)
                 except Exception as e:
                     with lock:
                         error_info['kind'] = "hand"
@@ -234,11 +240,29 @@ class Jaka_CON:
                         error_info['exception'] = e
                     error_event.set()
                     break
-            else:
-                t_elapsed = time.time() - now
-                t_wait = t_intv_hand - t_elapsed
-                if t_wait > 0:
-                    time.sleep(t_wait)
+            # ハンドの状態値を取得
+            # 情報を常に取得するとアームの制御ループの処理間隔を乱し
+            # 情報が必要なのはハンドに制御値を送った少し後だけなので以下のようにする
+            if now - last_tool_corrected_time < 1:
+                try:
+                    self.get_hand_state()
+                except Exception as e:
+                    with lock:
+                        error_info['kind'] = "hand"
+                        error_info['msg'] = self.format_error(e)
+                        error_info['exception'] = e
+                    error_event.set()
+                    break
+            if tool_corrected != last_tool_corrected:
+                last_tool_corrected = tool_corrected
+                last_tool_corrected_time = now
+            # 制御速度は最初遅く徐々に速くなり最後に遅くなるので
+            # 高頻度で近い制御値を送り続けると制御速度がずっと遅いままになるので
+            # 適度に間隔を開ける (値は把持力20%に対して実験的に決定)
+            t_elapsed = time.time() - now
+            t_wait = t_intv_hand - t_elapsed
+            if t_wait > 0:
+                time.sleep(t_wait)
 
     def control_loop(self) -> bool:
         """リアルタイム制御ループ"""
@@ -268,8 +292,8 @@ class Jaka_CON:
             # TODO: これがメインスレッドを遅くしている可能性ありだが
             # この1行だけでとも思う。要検証
             # 但しハンド由来のエラーでループを終了できなくなる
-            # if not hand_thread.is_alive():
-            #     break
+            if not hand_thread.is_alive():
+                break
 
             # NOTE: テスト用データなど、時間が経つにつれて
             # targetの値がstateの値によらずにどんどん
@@ -460,6 +484,8 @@ class Jaka_CON:
                 # その速度を保持し続けようとするので、そこに差分を足すと
                 # どんどん加速していくのでは。
                 # 遅延があることも影響しているかも。
+                # NOTE(20250813): targetがstateのフィードバックを受けていない場合は
+                # target_alignedは、stateとtargetが乖離するので不適切
                 target_diff = target_delayed - self.last_target_delayed
                 target_aligned = state + target_diff
                 last_target_filtered = _filter.previous_filtered_measurement
@@ -543,6 +569,14 @@ class Jaka_CON:
             if save_control:
                 # 分析用データ保存
                 datum = dict(
+                    kind="state",
+                    joint=state.tolist(),
+                    time=now,
+                )
+                js = json.dumps(datum)
+                f.write(js + "\n")
+
+                datum = dict(
                     kind="target",
                     joint=target_raw.tolist(),
                     time=now,
@@ -571,6 +605,7 @@ class Jaka_CON:
                     joint=control.tolist(),
                     time=now,
                     max_ratio=max_ratio,
+                    accel_max_ratio=accel_max_ratio,
                 )
                 js = json.dumps(datum)
                 f.write(js + "\n")
@@ -1190,17 +1225,17 @@ class Jaka_CON:
     def setup_logger(self, log_queue):
         self.logger = logging.getLogger("CTRL")
         if log_queue is not None:
-            handler = logging.handlers.QueueHandler(log_queue)
+            self.handler = logging.handlers.QueueHandler(log_queue)
         else:
-            handler = logging.StreamHandler()
-        self.logger.addHandler(handler)
+            self.handler = logging.StreamHandler()
+        self.logger.addHandler(self.handler)
         self.logger.setLevel(logging.INFO)
         self.robot_logger = logging.getLogger("CTRL-ROBOT")
         if log_queue is not None:
-            handler = logging.handlers.QueueHandler(log_queue)
+            self.robot_handler = logging.handlers.QueueHandler(log_queue)
         else:
-            handler = logging.StreamHandler()
-        self.robot_logger.addHandler(handler)
+            self.robot_handler = logging.StreamHandler()
+        self.robot_logger.addHandler(self.robot_handler)
         if MOCK:
             self.robot_logger.setLevel(logging.INFO)
         else:
@@ -1216,28 +1251,40 @@ class Jaka_CON:
         self.init_robot()
         self.init_realtime()
         while True:
-            command = control_pipe.recv()
-            if command["command"] == "enable":
-                self.enable()
-            elif command["command"] == "disable":
-                self.disable()
-            elif command["command"] == "default_pose":
-                self.default_pose()
-            elif command["command"] == "tidy_pose":
-                self.tidy_pose()
-            elif command["command"] == "release_hand":
-                self.send_release()
-            elif command["command"] == "clear_error":
-                self.clear_error()
-            elif command["command"] == "start_mqtt_control":
-                self.mqtt_control_loop()
-            elif command["command"] == "tool_change":
-                self.tool_change_not_in_rt()
-            elif command["command"] == "jog_joint":
-                self.jog_joint(**command["params"])
-            elif command["command"] == "jog_tcp":
-                self.jog_tcp(**command["params"])
-            elif command["command"] == "demo_put_down_box":
-                self.demo_put_down_box()
-            else:
-                self.logger.warning(f"Unknown command: {command['command']}")
+            if control_pipe.poll(timeout=1):
+                command = control_pipe.recv()
+                if command["command"] == "enable":
+                    self.enable()
+                elif command["command"] == "disable":
+                    self.disable()
+                elif command["command"] == "default_pose":
+                    self.default_pose()
+                elif command["command"] == "tidy_pose":
+                    self.tidy_pose()
+                elif command["command"] == "release_hand":
+                    self.send_release()
+                    # 十分な時間待つ
+                    time.sleep(3)
+                    self.get_hand_state()
+                elif command["command"] == "clear_error":
+                    self.clear_error()
+                elif command["command"] == "start_mqtt_control":
+                    self.mqtt_control_loop()
+                elif command["command"] == "tool_change":
+                    self.tool_change_not_in_rt()
+                elif command["command"] == "jog_joint":
+                    self.jog_joint(**command["params"])
+                elif command["command"] == "jog_tcp":
+                    self.jog_tcp(**command["params"])
+                elif command["command"] == "demo_put_down_box":
+                    self.demo_put_down_box()
+                else:
+                    self.logger.warning(
+                        f"Unknown command: {command['command']}")
+            if self.pose[32] == 1:
+                self.sm.close()
+                time.sleep(1)
+                self.logger.info("Process stopped")
+                self.handler.close()
+                self.robot_handler.close()
+                break

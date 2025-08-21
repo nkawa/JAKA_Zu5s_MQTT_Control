@@ -2,6 +2,9 @@ import datetime
 import logging
 import json
 import logging.handlers
+import queue
+import threading
+import time
 import tkinter as tk
 import multiprocessing
 from tkinter import scrolledtext
@@ -54,15 +57,20 @@ class GUILoggingHandler(logging.Handler):
     def __init__(self, gui: "MQTTWin") -> None:
         super().__init__()
         self.gui = gui
-    
+        self._closed = False 
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
-            # GUIはメインスレッドで更新する
-            self.gui.root.after(0, self.gui.update_log, msg)
+            self.gui.gui_log_queue.put(msg, block=True, timeout=None)
         except Exception:
             self.handleError(record)
 
+    def close(self) -> None:
+        # 並列処理時のログハンドラの多重closeを防ぐ
+        if not self._closed:
+            super().close()
+            self._closed = True
 
 class MicrosecondFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
@@ -83,13 +91,12 @@ class MQTTWin:
         log_queue = self.pm.log_queue
         self.setup_logging(log_queue=log_queue)
         self.setup_logger(log_queue=log_queue)
+        self.gui_log_queue = queue.Queue()
         self.logger.info("Starting Process!")
- 
-        self.pm.startDebug()
  
         self.root = root
         self.root.title("MQTT-JakaZu5s Controller")
-        self.root.geometry("1100x1080")
+        self.root.geometry("1100x1000")
 
         for col in range(8):
             self.root.grid_columnconfigure(col, weight=1, uniform="equal")
@@ -419,7 +426,7 @@ class MQTTWin:
                 row=row+2+3*i, column=0, padx=2, pady=2,
                 sticky="ew", columnspan=8, rowspan=2)
             self.topic_monitors[topic_type] = scrolledtext.ScrolledText(
-                frame_topic, height=3)
+                frame_topic, height=2)
             self.topic_monitors[topic_type].pack(
                 side="left", padx=2, expand=True, fill="both")
 
@@ -453,6 +460,7 @@ class MQTTWin:
         self.log_monitor.tag_config("WARNING", foreground="orange")
         self.log_monitor.tag_config("ERROR", foreground="red")
         self.update_monitor()
+        self.start_update_gui_log()
 
     def setup_logging(
         self, log_queue: Optional[multiprocessing.Queue] = None,
@@ -471,10 +479,10 @@ class MQTTWin:
         )
         for handler in handlers:
             handler.setFormatter(formatter)
-        listener = logging.handlers.QueueListener(log_queue, *handlers)
+        self.listener = logging.handlers.QueueListener(log_queue, *handlers)
         # listener.startからroot.mainloopまでのわずかな間は、
         # GUIの更新がないが、root.mainloopが始まると溜まっていたログも表示される
-        listener.start()
+        self.listener.start()
 
     def setup_logger(
         self, log_queue: Optional[multiprocessing.Queue] = None,
@@ -482,10 +490,10 @@ class MQTTWin:
         """GUIプロセスからのログの設定"""
         self.logger = logging.getLogger("GUI")
         if log_queue is not None:
-            handler = logging.handlers.QueueHandler(log_queue)
+            self.handler = logging.handlers.QueueHandler(log_queue)
         else:
-            handler = logging.StreamHandler()
-        self.logger.addHandler(handler)
+            self.handler = logging.StreamHandler()
+        self.logger.addHandler(self.handler)
         self.logger.setLevel(logging.INFO)
 
     def ConnectRobot(self):
@@ -600,6 +608,21 @@ class MQTTWin:
         #     return
         # self.pm.demo_put_down_box()
 
+    def update_gui_log(self):
+        while True:
+            msg = self.gui_log_queue.get(block=True, timeout=None)
+            # WM_DELETE_WINDOW後はハングアップする
+            # 直接GUILoggingHandlerから呼び出しLoggingがハングアップすると
+            # スレッドをjoinにより安全に終了できなくなるため
+            # queueを経由して別スレッドで呼び出す
+            # このスレッドはデーモンスレッドなのでjoinしなくても問題ない
+            self.root.after(0, self.update_log, msg)
+
+    def start_update_gui_log(self):
+        self.update_gui_log_thread = threading.Thread(
+            target=self.update_gui_log, daemon=True)
+        self.update_gui_log_thread.start()
+
     def update_monitor(self):
         # モニタープロセスからの情報
         log = self.pm.get_current_monitor_log()
@@ -696,7 +719,15 @@ class MQTTWin:
         if current_lines > 1000:
             excess_lines = current_lines - 1000
             box.delete("1.0", f"{excess_lines}.0")
-    
+   
+    def on_closing(self):
+        """ウインドウを閉じるときの処理"""
+        self.pm.stop_all_processes()
+        time.sleep(1)
+        self.listener.stop()
+        self.handler.close()
+        logging.shutdown()
+        self.root.destroy()
 
 if __name__ == '__main__':
     # Freeze Support for Windows
@@ -734,4 +765,5 @@ if __name__ == '__main__':
     root = tk.Tk()
     mqwin = MQTTWin(root, **kwargs)
     mqwin.root.lift()
+    root.protocol("WM_DELETE_WINDOW", mqwin.on_closing)
     root.mainloop()
