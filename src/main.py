@@ -115,7 +115,7 @@ class MQTTWin:
         self.button_DemoPutDownBox = \
             tk.Button(self.root, text="DemoPutDownBox", padx=5,
                        command=self.DemoPutDownBox, state="disabled")
-        self.button_DemoPutDownBox.grid(row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
+        # self.button_DemoPutDownBox.grid(row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
 
         row += 1
 
@@ -132,7 +132,7 @@ class MQTTWin:
         self.button_ReleaseHand = \
             tk.Button(self.root, text="ReleaseHand", padx=5,
                       command=self.ReleaseHand, state="disabled")
-        self.button_ReleaseHand.grid(row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
+        # self.button_ReleaseHand.grid(row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
 
         self.frame_enabled = tk.Frame(self.root)
         self.frame_enabled.grid(row=row,column=6,padx=2,pady=2,sticky="w", columnspan=2)
@@ -190,8 +190,8 @@ class MQTTWin:
         self.button_ToolChange = \
             tk.Button(self.root, text="ToolChange", padx=5,
                       command=self.ToolChange, state="disabled")
-        self.button_ToolChange.grid(
-            row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
+        # self.button_ToolChange.grid(
+        #     row=row,column=4,padx=2,pady=2,sticky="ew", columnspan=2)
 
         self.frame_mqtt_control = tk.Frame(self.root)
         self.frame_mqtt_control.grid(row=row,column=6,padx=2,pady=2,sticky="w", columnspan=2)
