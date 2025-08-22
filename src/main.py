@@ -390,8 +390,8 @@ class MQTTWin:
 
         row += 8
 
-        tk.Label(self.root, text="Topics").grid(
-            row=row, column=0, padx=2, pady=10, sticky="w", columnspan=8)
+        # tk.Label(self.root, text="Topics").grid(
+        #     row=row, column=0, padx=2, pady=10, sticky="w", columnspan=8)
         topic_types = [
             "mgr/register",
             "dev",
