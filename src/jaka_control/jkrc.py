@@ -361,6 +361,75 @@ class RC:
         powered_on = ret["power"] == "powered_on"
         return (ec, int(powered_on), int(enabled))
 
+    # def set_torsenosr_brand(self, sensor_brand: int) -> Tuple[int] | Tuple[int, Any]:
+    #     """
+    #     Set the brand of the sensor currently being used.
+    #     sensor_brand: 1 for SONY Semiconductor; 2 for BoschSensortec; 3 for STMicroelectronics
+    #     """
+    #     # assert sensor_brand in [1, 2, 3]
+    #     num = sensor_brand
+    #     send = f'{{"cmdName": "set_torsenosr_brand", "sensor_brand": {num}}}'
+    #     ec, ret, recv = self._process(send)
+    #     if ec != 0:
+    #         return (ec, recv)
+    #     return (ec,)
+
+    # def get_torsenosr_brand(self) -> Tuple[int, str] | Tuple[int, Any]:
+    #     """
+    #     Get the brand of the sensor currently being used.
+    #     The numbers output represent the different sensor brands.
+    #     1 is SONY Semiconductor; 2 is BoschSensortec; 3 is STMicroelectronics
+    #     """
+    #     send = '{"cmdName": "get_torsenosr_brand"}'
+    #     ec, ret, recv = self._process(send)
+    #     if ec != 0:
+    #         return (ec, recv)
+    #     brand = ret["sensor_brand"]
+    #     return (ec, brand)
+
+    # def set_torque_sensor_mode(
+    #     self, sensor_mode: int,
+    # ) -> Tuple[int] | Tuple[int, Any]:
+    #     """
+    #     Set the torque sensor mode.
+    #     sensor_mode: 0 for disabled, 1 for enabled.
+    #     """
+    #     assert sensor_mode in [0, 1]
+    #     # Python SDKでは0が無効、1が有効だが、TCP APIでは逆。
+    #     # sensor_mode = 0 if sensor_mode else 1
+    #     send = f'{{"cmdName": "set_torque_sensor_mode", "sensor_mode": {sensor_mode}}}'
+    #     ec, ret, recv = self._process(send)
+    #     if ec != 0:
+    #         return (ec, recv)
+    #     return (ec,)
+
+    # def get_torque_sensor_comm(self) -> Tuple[int, str] | Tuple[int, Any]:
+    #     """Python SDKとは異なる。"""
+    #     send = '{"cmdName": "get_torque_sensor_comm"}'
+    #     ec, ret, recv = self._process(send)
+    #     if ec != 0:
+    #         return (ec, recv)
+    #     type_ = ret.get("type")
+    #     ip_addr = ret.get("ip_addr")
+    #     port = ret.get("port")
+    #     return (ec, type_, ip_addr, port)
+
+    # def set_torque_sensor_comm(
+    #     self, type: int = 0, ip_addr: str = '192.168.2.100', port: int = 8080,
+    # ) -> Tuple[int] | Tuple[int, Any]:
+    #     """        
+    #     Set the F/T sensor IP address.
+    #     type: 0 is using tcp/ip protocol, 1 is using RS485 protocol
+    #     ip_addr is the address of the force control sensor
+    #     port is the port number of force control sensor when using tcp/ip protoco
+    #     """
+    #     assert type in [0, 1]
+    #     send = f'{{"cmdName": "set_torque_sensor_comm", "type": {type}, "ip_addr": "{ip_addr}", "port": {port}}}'
+    #     ec, ret, recv = self._process(send)
+    #     if ec != 0:
+    #         return (ec, recv)
+    #     return (ec,)
+
     # def _logout_sdk(self) -> None:
     #     # NOTE: "Quit connection"とのことだが具体的にどうなっているかは不明
     #     send = '{"cmdName": "quit"}'
