@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 ## ここでUUID を使いたい
 import uuid
 
-from jaka_control.jaka_robot_mock import MockJakaRobotSharedMemoryManager
+# from jaka_control.jaka_robot_mock import MockJakaRobotSharedMemoryManager
 
 from .config import SHM_NAME, SHM_SIZE
 from .jaka_zu_monitor_gui import run_joint_monitor_gui
@@ -272,7 +272,8 @@ class ProcessManager:
         self.state_monitor_gui = False
         self.log_queue = multiprocessing.Queue()
         if MOCK:
-            self.mock_sm_manager = MockJakaRobotSharedMemoryManager()
+            # self.mock_sm_manager = MockJakaRobotSharedMemoryManager()
+            self.mock_sm_manager = None
         self.recvP = None
         self.monP = None
         self.ctrlP = None
@@ -329,6 +330,11 @@ class ProcessManager:
             self.ctrlP.join()
         if self.monitor_guiP is not None:
             self.monitor_guiP.join()
+        self.sm.close()
+        self.sm.unlink()
+        self.manager.shutdown()
+        self.main_pipe.close()
+        self.control_pipe.close()
 
     def _send_command_to_control(self, command):
         self.main_pipe.send(command)
@@ -381,10 +387,3 @@ class ProcessManager:
         with self.mqtt_control_lock:
             mqtt_control_dict = self.mqtt_control_dict.copy()
         return mqtt_control_dict
-
-    def __del__(self):
-        self.sm.close()
-        self.sm.unlink()
-        self.manager.shutdown()
-        self.main_pipe.close()
-        self.control_pipe.close()

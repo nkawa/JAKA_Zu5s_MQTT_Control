@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from .ag95_extension import ExtendedAG95
 from .ag95_mock import MockAG95
 from .jaka_robot import JakaRobot
-from .jaka_robot_mock import MockJakaRobot
+# from .jaka_robot_mock import MockJakaRobot
 from .config import (
     DEFAULT_JOINT, MIN_JOINT_LIMIT, MAX_JOINT_LIMIT, SHM_NAME, SHM_SIZE, T_INTV
 )
@@ -104,7 +104,8 @@ class Jaka_CON:
     def init_robot(self):
         try:
             if MOCK:
-                robot = MockJakaRobot
+                # robot = MockJakaRobot
+                robot = None
             else:
                 robot = JakaRobot
             self.robot = robot(

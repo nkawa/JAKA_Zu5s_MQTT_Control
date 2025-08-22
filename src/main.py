@@ -723,7 +723,7 @@ class MQTTWin:
     def on_closing(self):
         """ウインドウを閉じるときの処理"""
         self.pm.stop_all_processes()
-        time.sleep(1)
+        # time.sleep(1)
         self.listener.stop()
         self.handler.close()
         logging.shutdown()
