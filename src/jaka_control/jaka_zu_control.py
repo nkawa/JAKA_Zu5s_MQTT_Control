@@ -2,7 +2,7 @@
 
 import logging
 import traceback
-from typing import Any, Dict, List, Literal, Tuple
+from typing import Any, Dict, List, Literal, TextIO, Tuple
 import datetime
 import time
 
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from .ag95_extension import ExtendedAG95
 from .ag95_mock import MockAG95
 from .jaka_robot import JakaRobot
-from .jaka_robot_mock import MockJakaRobot
+# from .jaka_robot_mock import MockJakaRobot
 from .config import (
     DEFAULT_JOINT, MIN_JOINT_LIMIT, MAX_JOINT_LIMIT, SHM_NAME, SHM_SIZE, T_INTV
 )
@@ -91,9 +91,6 @@ speed_tool_change = 2
 target_state_abs_joint_diff_limit = [30, 30, 40, 40, 40, 60]
 
 save_control = SAVE
-if save_control:
-    save_path = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + "_control.jsonl"
-    f = open(save_path, "w")
 
 
 class Jaka_CON:
@@ -104,7 +101,8 @@ class Jaka_CON:
     def init_robot(self):
         try:
             if MOCK:
-                robot = MockJakaRobot
+                # robot = MockJakaRobot
+                robot = None
             else:
                 robot = JakaRobot
             self.robot = robot(
@@ -264,7 +262,7 @@ class Jaka_CON:
             if t_wait > 0:
                 time.sleep(t_wait)
 
-    def control_loop(self) -> bool:
+    def control_loop(self, f: TextIO | None = None) -> bool:
         """リアルタイム制御ループ"""
         self.last = 0
         self.logger.info("Start Control Loop")
@@ -350,13 +348,11 @@ class Jaka_CON:
 
             # TODO: VR側でもソフトリミットを設定したほうが良い
             target_th = np.maximum(target, min_joint_soft_limit)
-            if (target == target_th).any():
-                pass
-                # self.logger.warning("target reached minimum threshold")
+            if (target != target_th).any():
+                self.logger.warning("target reached minimum threshold")
             target_th = np.minimum(target_th, max_joint_soft_limit)
-            if (target == target_th).any():
-                pass
-                # self.logger.warning("target reached maximum threshold")
+            if (target != target_th).any():
+                self.logger.warning("target reached maximum threshold")
             target = target_th
 
             # 目標値が状態値から大きく離れた場合は制御を停止する
@@ -566,49 +562,39 @@ class Jaka_CON:
             
             self.pose[24:30] = control
 
-            if save_control:
+            if f is not None:
                 # 分析用データ保存
                 datum = dict(
-                    kind="state",
-                    joint=state.tolist(),
                     time=now,
-                )
-                js = json.dumps(datum)
-                f.write(js + "\n")
-
-                datum = dict(
                     kind="target",
                     joint=target_raw.tolist(),
-                    time=now,
                 )
                 js = json.dumps(datum)
                 f.write(js + "\n")
 
                 datum = dict(
-                    kind="target_th",
-                    joint=target_th.tolist(),
                     time=now,
-                )
-                js = json.dumps(datum)
-                f.write(js + "\n")
-
-                datum = dict(
                     kind="target_delayed",
                     joint=target_delayed.tolist(),
-                    time=now,
                 )
                 js = json.dumps(datum)
                 f.write(js + "\n")
 
                 datum = dict(
+                    time=now,
                     kind="control",
                     joint=control.tolist(),
-                    time=now,
                     max_ratio=max_ratio,
                     accel_max_ratio=accel_max_ratio,
                 )
                 js = json.dumps(datum)
                 f.write(js + "\n")
+
+            t_elapsed = time.time() - now
+            if t_elapsed > t_intv * 2:
+                self.logger.warning(
+                    f"Control loop is more than 2 times as slow as expected before command: "
+                    f"{t_elapsed} seconds")
 
             if move_robot:
                 try:
@@ -645,7 +631,7 @@ class Jaka_CON:
             t_elapsed = time.time() - now
             if t_elapsed > t_intv * 2:
                 self.logger.warning(
-                    f"Control loop is more than 2 times as slow as expected: "
+                    f"Control loop is more than 2 times as slow as expected after command: "
                     f"{t_elapsed} seconds")
 
             if stop:
@@ -770,7 +756,13 @@ class Jaka_CON:
                 # 制御ループ
                 # 停止するのは、ユーザーが要求した場合か、自然に内部エラーが発生した場合
                 self.enter_servo_mode()
-                self.control_loop()
+                if save_control:
+                    with open(
+                        os.path.join(self.logging_dir, "control.jsonl"), "a"
+                    ) as f:
+                        self.control_loop(f)
+                else:
+                    self.control_loop()
                 self.leave_servo_mode()
                 # ここまで正常に終了した場合、ユーザーが要求した場合が成功を意味する
                 if self.pose[16] == 1:
@@ -858,6 +850,7 @@ class Jaka_CON:
             # 停止フラグが成功の場合は、ユーザーが要求した場合のみありうる
             next_tool_id = self.pose[17].copy()
             put_down_box = self.pose[21].copy()
+            change_log_file = self.pose[33].copy()
             if success_stop:
                 # ツールチェンジが要求された場合
                 if next_tool_id != 0:
@@ -887,6 +880,11 @@ class Jaka_CON:
                     # 成功しても失敗してもループを継続する (ツールを変えることによる
                     # 予測できないエラーは起こらないため)
                     self.demo_put_down_box()
+                # ログファイルを変更することが要求された場合
+                elif change_log_file != 0:
+                    self.logger.info("User required change log file")
+                    # ログファイルを変更する
+                    self.get_logging_dir_and_change_log_file()
                 # 単なる停止が要求された場合は、ループを抜ける
                 else:
                     break
@@ -904,6 +902,9 @@ class Jaka_CON:
                     self.pose[22] = 2
                     self.pose[21] = 0
                 # ループを抜ける
+                elif change_log_file != 0:
+                    # 要求コマンドのみリセット
+                    self.pose[33] = 0
                 break
         self.pose[15] = 0
 
@@ -1241,13 +1242,26 @@ class Jaka_CON:
         else:
             self.robot_logger.setLevel(logging.WARNING)
 
-    def run_proc(self, control_pipe, slave_mode_lock, log_queue):
+    def get_logging_dir_and_change_log_file(self) -> None:
+        command = self.control_pipe.recv()
+        logging_dir = command["params"]["logging_dir"]
+        self.logger.info("Change log file")
+        self.change_log_file(logging_dir)
+
+    def change_log_file(self, logging_dir: str) -> None:
+        self.logging_dir = logging_dir
+        self.pose[33] = 0
+
+    def run_proc(self, control_pipe, slave_mode_lock, log_queue, logging_dir):
         self.setup_logger(log_queue)
         self.logger.info("Process started")
         self.sm = mp.shared_memory.SharedMemory(SHM_NAME)
         self.pose = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf)
         self.slave_mode_lock = slave_mode_lock
  
+        self.control_pipe = control_pipe
+        self.logging_dir = logging_dir
+
         self.init_robot()
         self.init_realtime()
         while True:
@@ -1278,6 +1292,10 @@ class Jaka_CON:
                     self.jog_tcp(**command["params"])
                 elif command["command"] == "demo_put_down_box":
                     self.demo_put_down_box()
+                elif command["command"] == "change_log_file":
+                    # MQTTControl時以外にログファイルを変更する場合に対応
+                    self.logger.info("Change log file")
+                    self.change_log_file(**command["params"])
                 else:
                     self.logger.warning(
                         f"Unknown command: {command['command']}")

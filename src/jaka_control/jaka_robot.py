@@ -50,6 +50,16 @@ class JakaRobot:
     def start(self) -> None:
         self.logger.info("start")
         self.client_move.login()
+        # res = self.client_move.set_torsenosr_brand(1)
+        # if res[0] != 0:
+        #     raise JakaRobotError(res[1])
+        # res = self.client_move.set_torque_sensor_mode(0)
+        # if res[0] != 0:
+        #     raise JakaRobotError(res[1])
+        # res = self.client_move.set_torque_sensor_comm(
+        #     type=1, ip_addr='192.168.2.100', port=8080)
+        # if res[0] != 0:
+        #     raise JakaRobotError(res[1])
         cnt = 0
         if not self.is_powered_on():
             self.power_on()
