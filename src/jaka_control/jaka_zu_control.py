@@ -1312,7 +1312,10 @@ class JAKA_CON_Archiver:
                 datum = None
             if ((f is not None) and 
                 (datum is not None)):
-                f.write(json.dumps(datum, ensure_ascii=False) + "\n")
+                s = ""
+                for d in datum:
+                    s = s + json.dumps(d, ensure_ascii=False) + "\n"
+                f.write(s)
             # プロセス終了時
             if self.pose[32] == 1:
                 return False
