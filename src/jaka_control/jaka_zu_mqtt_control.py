@@ -21,7 +21,7 @@ import uuid
 
 from .config import SHM_NAME, SHM_SIZE
 from .jaka_zu_monitor_gui import run_joint_monitor_gui
-from .jaka_zu_control import Jaka_CON
+from .jaka_zu_control import Jaka_CON, JAKA_CON_Archiver
 from .jaka_zu_monitor import Jaka_MON
 
 # パラメータ
@@ -259,6 +259,7 @@ class ProcessManager:
         # [32]: プロセス終了フラグ
         # [33]: ログ出力先の変更フラグ(control用)
         # [34]: ログ出力先の変更フラグ(monitor用)
+        # [35]: ログ出力先の変更フラグ(contol-archiver用)
         self.ar = np.ndarray((SHM_SIZE,), dtype=np.dtype("float32"), buffer=self.sm.buf) # 共有メモリ上の Array
         self.ar[:] = 0
         self.manager = multiprocessing.Manager()
@@ -281,6 +282,9 @@ class ProcessManager:
         self.monP = None
         self.ctrlP = None
         self.monitor_guiP = None
+        self.control_to_archiver_queue = multiprocessing.Queue()
+        self.main_to_control_archiver_pipe, self.control_archiver_pipe = \
+            multiprocessing.Pipe()
 
     def startRecvMQTT(self):
         self.recv = Jaka_MQTT()
@@ -311,9 +315,20 @@ class ProcessManager:
         self.ctrl = Jaka_CON()
         self.ctrlP = Process(
             target=self.ctrl.run_proc,
-            args=(self.control_pipe, self.slave_mode_lock, self.log_queue, logging_dir),
+            args=(self.control_pipe, self.slave_mode_lock, self.log_queue, logging_dir, self.control_to_archiver_queue),
             name="JAKA-Zu-control")
         self.ctrlP.start()
+
+        self.ctrl_archiver = JAKA_CON_Archiver()
+        self.ctrl_archiverP = Process(
+            target=self.ctrl_archiver.run_proc,
+            args=(self.control_archiver_pipe,
+                  self.log_queue,
+                  logging_dir,
+                  self.control_to_archiver_queue,
+                  ),
+            name="JAKA-Zu-control-archiver")
+        self.ctrl_archiverP.start()
         self.state_control = True
 
     def startMonitorGUI(self):
@@ -333,6 +348,8 @@ class ProcessManager:
             self.monP.join()
         if self.ctrlP is not None:
             self.ctrlP.join()
+        if self.ctrl_archiverP is not None:
+            self.ctrl_archiverP.join()
         if self.monitor_guiP is not None:
             self.monitor_guiP.join()
         self.sm.close()
@@ -342,6 +359,7 @@ class ProcessManager:
         self.control_pipe.close()
         self.main_to_monitor_pipe.close()
         self.monitor_pipe.close()
+        self.control_to_archiver_queue.close()
 
     def _send_command_to_control(self, command):
         self.main_to_control_pipe.send(command)
@@ -407,3 +425,6 @@ class ProcessManager:
         self._send_command_to_control({"command": "change_log_file", "params": {"logging_dir": logging_dir}})
         # 制御プロセスはMQTTControl時は一旦停止させる
         self.stop_mqtt_control()
+        # 制御記録用プロセス
+        self.ar[35] = 1
+        self._send_command_to_control({"command": "change_log_file", "params": {"logging_dir": logging_dir}})
