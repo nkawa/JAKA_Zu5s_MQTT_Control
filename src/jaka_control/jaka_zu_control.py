@@ -274,6 +274,7 @@ class Jaka_CON:
         error_event = threading.Event()
         lock = threading.Lock()
         error_info = {}
+        last_target = None
 
         use_hand_thread = True
         if use_hand_thread:
@@ -357,8 +358,16 @@ class Jaka_CON:
             target = target_th
 
             # 目標値が状態値から大きく離れた場合
-            if (np.abs(target - state) > 
-                target_state_abs_joint_diff_limit).any():
+            # すでに目標値を受け取っていない場合はすぐに、
+            # 目標値を受け取っている場合は前回の目標値からも大きく離れた場合に停止させる
+            if (
+                (np.abs(target - state) > 
+                target_state_abs_joint_diff_limit).any()
+            ) and (
+                last_target is None or
+                (np.abs(target - last_target) > 
+                target_state_abs_joint_diff_limit).any()
+            ):
                 with lock:
                     msg = "Target and state are too different"
                     error_info['kind'] = "robot"
@@ -368,6 +377,8 @@ class Jaka_CON:
                 stop_event.set()
                 # 強制停止する。強制停止しないとエラーメッセージを返すのが複雑になる
                 break
+
+            last_target = target
 
             if self.last == 0:
                 self.logger.info("Start sending control command")
