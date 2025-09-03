@@ -274,6 +274,7 @@ class Jaka_CON:
         error_event = threading.Event()
         lock = threading.Lock()
         error_info = {}
+        last_target = None
 
         use_hand_thread = True
         if use_hand_thread:
@@ -356,12 +357,28 @@ class Jaka_CON:
                 self.logger.warning("target reached maximum threshold")
             target = target_th
 
-            # 目標値が状態値から大きく離れた場合は制御を停止する
-#            if (np.abs(target - state) > 
-#                target_state_abs_joint_diff_limit).any():
-#                stop = 1
-#                code_stop = 1
-#                message_stop = "目標値が状態値から離れすぎています"
+            # 目標値が状態値から大きく離れた場合
+            # すでに目標値を受け取っていない場合はすぐに、
+            # 目標値を受け取っている場合は前回の目標値からも大きく離れた場合に停止させる
+            if (
+                (np.abs(target - state) > 
+                target_state_abs_joint_diff_limit).any()
+            ) and (
+                last_target is None or
+                (np.abs(target - last_target) > 
+                target_state_abs_joint_diff_limit).any()
+            ):
+                with lock:
+                    msg = "Target and state are too different"
+                    error_info['kind'] = "robot"
+                    error_info['msg'] = msg
+                    error_info['exception'] = ValueError(msg)
+                error_event.set()
+                stop_event.set()
+                # 強制停止する。強制停止しないとエラーメッセージを返すのが複雑になる
+                break
+
+            last_target = target
 
             if self.last == 0:
                 self.logger.info("Start sending control command")
@@ -774,6 +791,11 @@ class Jaka_CON:
                     # スレーブモードから抜けられているかわからないので
                     # モニタプロセスでエラーが補足できているかは保証されない
                     # 抜けても抜けられなくても再接続すればうまく行くかもしれない
+
+                # 目標値が状態値から大きく離れた場合は自動復帰しない
+                if str(e) == "Target and state are too different":
+                    self.pose[16] = 0
+                    return False
 
                 # タイムアウトの有無によらず再接続する
                 if True:
