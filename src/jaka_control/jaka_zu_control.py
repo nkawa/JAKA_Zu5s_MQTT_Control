@@ -356,12 +356,18 @@ class Jaka_CON:
                 self.logger.warning("target reached maximum threshold")
             target = target_th
 
-            # 目標値が状態値から大きく離れた場合は制御を停止する
-#            if (np.abs(target - state) > 
-#                target_state_abs_joint_diff_limit).any():
-#                stop = 1
-#                code_stop = 1
-#                message_stop = "目標値が状態値から離れすぎています"
+            # 目標値が状態値から大きく離れた場合
+            if (np.abs(target - state) > 
+                target_state_abs_joint_diff_limit).any():
+                with lock:
+                    msg = "Target and state are too different"
+                    error_info['kind'] = "robot"
+                    error_info['msg'] = msg
+                    error_info['exception'] = ValueError(msg)
+                error_event.set()
+                stop_event.set()
+                # 強制停止する。強制停止しないとエラーメッセージを返すのが複雑になる
+                break
 
             if self.last == 0:
                 self.logger.info("Start sending control command")
