@@ -781,6 +781,11 @@ class Jaka_CON:
                     # モニタプロセスでエラーが補足できているかは保証されない
                     # 抜けても抜けられなくても再接続すればうまく行くかもしれない
 
+                # 目標値が状態値から大きく離れた場合は自動復帰しない
+                if str(e) == "Target and state are too different":
+                    self.pose[16] = 0
+                    return False
+
                 # タイムアウトの有無によらず再接続する
                 if True:
                     for i in range(1, 11):
