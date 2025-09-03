@@ -6,3 +6,4 @@ pydhgripper @ git+https://github.com/han-xudong/pyDHgripper.git@main
 psutil>=7.0.0
 pyqtgraph==0.13.7
 PyQt6==6.9.1
+tsdownsample>=0.1.4
